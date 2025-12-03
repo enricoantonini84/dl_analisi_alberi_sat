@@ -1,0 +1,204 @@
+\chapter{Servizi di mappe satellitari}
+Per poter effettuare l'inferenza sui modelli di machine learning descritti nei capitoli precedenti, è necessario disporre di immagini satellitari di qualità adeguata. Il mercato offre diverse piattaforme per l'acquisizione di questo tipo di immagini, ciascuna con caratteristiche tecniche, piani tariffari e limitazioni d'uso differenti.\\
+In questo capitolo vengono analizzati i principali servizi disponibili, confrontandoli in base a criteri rilevanti per applicazioni di rilevamento automatico della copertura arborea: risoluzione massima (livello di zoom), possibilità di download, compatibilità con inferenza ML e costi.
+
+\section{MapTiler}
+MapTiler è una piattaforma che offre servizi di mappe satellitari con ottima risoluzione, particolarmente in Europa e USA.
+
+\subsection{Piani tariffari}
+\begin{itemize}
+    \item \textbf{FREE}: \$0/mese (uso non commerciale limitato) - 100K crediti
+    \item \textbf{FLEX}: da \$25/mese - 500K crediti
+    \item \textbf{UNLIMITED}: \$295/mese - 5M crediti
+    \item \textbf{CUSTOM}: su richiesta - fatturazione annuale/trimestrale, sconti volume
+\end{itemize}
+
+\subsection{Dettagli tecnici}
+\begin{itemize}
+    \item \textbf{Zoom massimo}: fino a z20
+    \item \textbf{Limiti download}: piano FREE limitato, piani a pagamento con quote basate su tile requests (1 tile satellite = 4 crediti)
+    \item \textbf{Inferenza ML}: permessa via API
+    \item \textbf{Download}: non consentito (salvo licenze custom on-premise)
+\end{itemize}
+
+\noindent
+MapTiler offre anche satellite imagery on-demand tramite partnership con Satellogic. Questa piattaforma è stata utilizzata per l'inferenza sulle 24 città italiane oggetto di studio.
+
+\section{Stadia Maps}
+Stadia Maps è un provider di mappe con buona copertura globale, ma con termini restrittivi per applicazioni di machine learning.
+
+\subsection{Piani tariffari}
+\begin{itemize}
+    \item \textbf{FREE}: \$0/mese - 200K crediti (50K tiles satellite) - NO uso commerciale, NO satellite imagery
+    \item \textbf{STARTER}: \$49/mese - 2M crediti (500K tiles satellite) - NO satellite imagery
+    \item \textbf{STANDARD}: \$249/mese - 15M crediti (3.75M tiles satellite) - satellite imagery inclusa
+    \item \textbf{PROFESSIONAL}: \$799/mese - 60M crediti (15M tiles satellite) - trial 14gg gratuito
+    \item \textbf{ENTERPRISE}: custom - miliardi di crediti/anno - SLA, on-premises, licenze perpetue
+\end{itemize}
+
+\subsection{Dettagli tecnici}
+\begin{itemize}
+    \item \textbf{Zoom massimo}: z18-19
+    \item \textbf{Limiti download}: basato su tile requests (tiles 512x512px, 1 tile satellite = 4 crediti)
+    \item \textbf{Inferenza ML}: non consentita (uso commerciale richiede licenza)
+    \item \textbf{Download}: non consentito
+\end{itemize}
+
+\noindent
+Nonostante la buona qualità delle immagini, i termini di servizio non permettono l'utilizzo per applicazioni di machine learning.
+
+\section{LandViewer (EOSDA)}
+LandViewer, sviluppato da EOS Data Analytics, è una piattaforma orientata all'analisi di immagini satellitari con strumenti avanzati integrati.
+
+\subsection{Piani tariffari}
+\begin{itemize}
+    \item \textbf{FREE}: \$0 - 10 download/giorno di immagini medie (Sentinel, Landsat), accesso completo agli strumenti di analisi, storage cloud personale 256GB, 20+ indici vegetazionali pre-impostati, visualizzazione illimitata
+    \item \textbf{PREMIUM}: prezzo su richiesta - mensile/annuale, limiti di download aumentati, funzionalità avanzate, supporto prioritario
+    \item \textbf{HIGH-RES (On-Demand)}: pay-per-km² - Airbus Archive 50cm: ~\$3.80/km² (no ordine minimo), Airbus Archive 30cm: ~\$18/km² (ordine minimo 25km²)
+\end{itemize}
+
+\subsection{Dettagli tecnici}
+\begin{itemize}
+    \item \textbf{Zoom massimo}: z19-20+ (fino a 0.30m/px con high-res)
+    \item \textbf{Limiti download}: FREE 10 download/giorno, Premium e High-Res in base al piano
+    \item \textbf{Inferenza ML}: permessa
+    \item \textbf{Download}: consentito (GeoTIFF e vari formati)
+\end{itemize}
+
+\noindent
+La piattaforma include strumenti di analisi come NDVI e change detection, con fonti dati quali Sentinel-2, Landsat, MODIS, KOMPSAT, SuperView e Gaofen. Tuttavia risulta estremamente costosa per immagini ad alta risoluzione: per una città di medie dimensioni il costo può aggirarsi intorno ai 2000 dollari.
+
+\section{Google Maps Platform}
+Google Maps Platform offre una copertura eccellente a livello globale con ottima risoluzione.
+
+\subsection{Piani tariffari}
+\begin{itemize}
+    \item \textbf{FREE}: 10K-100K chiamate gratuite/mese per SKU (dal marzo 2025)
+    \item \textbf{Pay-as-you-go}: dopo il limite gratuito - Dynamic Maps \$7/1000 requests, Static Maps \$2/1000 requests, Map Tiles API vari tier
+\end{itemize}
+
+\subsection{Dettagli tecnici}
+\begin{itemize}
+    \item \textbf{Zoom massimo}: variabile z18-22 (dipende dalla zona, verificabile tramite MaxZoomService)
+    \item \textbf{Limiti download}: basato su API calls
+    \item \textbf{Inferenza ML}: non consentita
+    \item \textbf{Download}: non consentito direttamente
+\end{itemize}
+
+\noindent
+Nonostante l'ottima risoluzione e la presenza di un watermark su ogni tile, i termini e le condizioni non permettono l'utilizzo per inferenza con modelli di machine learning.
+
+\section{Mapbox}
+Mapbox è una piattaforma molto utilizzata per applicazioni web e mobile, con ottima qualità delle immagini.
+
+\subsection{Piani tariffari}
+\begin{itemize}
+    \item \textbf{FREE tier}: disponibile
+    \item \textbf{Piani a pagamento}: da \$50/mese - satellite tiles: tier 750K, 2M, 4M, 20M
+\end{itemize}
+
+\subsection{Dettagli tecnici}
+\begin{itemize}
+    \item \textbf{Zoom massimo}: z0-21+ (può fare overzoom)
+    \begin{itemize}
+        \item z0-8: NASA MODIS
+        \item z9-12: Maxar + Landsat
+        \item z13-16: Maxar Vivid
+        \item z16+: Vexcel aerial (sub-metro in Nord America/Europa)
+    \end{itemize}
+    \item \textbf{Limiti download}: basato su tile requests e MAU
+    \item \textbf{Inferenza ML}: da verificare (menzionano supporto ML ma con limiti)
+    \item \textbf{Download}: non direttamente consentito
+\end{itemize}
+
+\section{Copernicus Data Space Ecosystem / Sentinel Hub}
+Il programma Copernicus dell'Unione Europea offre accesso completamente gratuito ai dati satellitari Sentinel.
+
+\subsection{Piani tariffari}
+\begin{itemize}
+    \item \textbf{COMPLETAMENTE GRATUITO}: accesso libero e illimitato a tutti i dati
+\end{itemize}
+
+\subsection{Dettagli tecnici}
+\begin{itemize}
+    \item \textbf{Zoom massimo}: z16 (Sentinel-2: 10m/px, Sentinel-1 SAR disponibile)
+    \item \textbf{Limiti download}: nessun limite, accesso libero
+    \item \textbf{Inferenza ML}: pienamente supportato (disponibili librerie dedicate come eo-learn)
+    \item \textbf{Download}: illimitato e gratuito
+\end{itemize}
+
+\noindent
+Nonostante l'accesso gratuito e il pieno supporto per applicazioni ML, la risoluzione massima di z16 (10m/px) risulta insufficiente per il rilevamento di singoli alberi, rendendo questa piattaforma inadatta per gli scopi di questa ricerca.
+
+\section{Planet Labs}
+Planet Labs gestisce una delle più grandi costellazioni di satelliti per l'osservazione terrestre.
+
+\subsection{Piani tariffari}
+\begin{itemize}
+    \item \textbf{Pricing su richiesta}: disponibili programmi per ricerca/educazione fino a 3000km²
+\end{itemize}
+
+\subsection{Dettagli tecnici}
+\begin{itemize}
+    \item \textbf{Zoom massimo}: z20+ (da 3m fino a 30cm a seconda del satellite)
+    \item \textbf{Limiti download}: basati su piano sottoscritto
+    \item \textbf{Inferenza ML}: permessa con licenza appropriata
+    \item \textbf{Download}: consentito
+\end{itemize}
+
+\noindent
+La registrazione richiede approvazione con tempi lunghi e i limiti sono scarsi per utenti privati. Potrebbe rappresentare una buona soluzione per progetti accademici, previa verifica della disponibilità di API.
+
+\section{Maxar SecureWatch / DigitalGlobe}
+Maxar Technologies, attraverso DigitalGlobe, offre alcune delle immagini satellitari commerciali a più alta risoluzione disponibili.
+
+\subsection{Piani tariffari}
+\begin{itemize}
+    \item \textbf{Enterprise}: prezzi su richiesta
+\end{itemize}
+
+\subsection{Dettagli tecnici}
+\begin{itemize}
+    \item \textbf{Zoom massimo}: z22+ (fino a 30cm/px)
+    \item \textbf{Limiti download}: enterprise
+    \item \textbf{Inferenza ML}: N/D
+    \item \textbf{Download}: N/D
+\end{itemize}
+
+\noindent
+Piattaforma molto costosa e orientata principalmente a clienti governativi e enterprise. L'alta qualità delle immagini non la rende accessibile per progetti accademici singoli.
+
+\section{Geoportale Regione Veneto}
+Il Geoportale della Regione Veneto fornisce accesso a ortofoto del territorio regionale.
+
+\subsection{Piani tariffari}
+\begin{itemize}
+    \item \textbf{FREE}: \$0 - accesso completo senza registrazione, uso non commerciale e commerciale consentiti sotto licenza IODL 2.0
+\end{itemize}
+
+\subsection{Dettagli tecnici}
+\begin{itemize}
+    \item \textbf{Zoom massimo}: ortofoto AGEA 2021/2018 (~z19-20)
+    \item \textbf{Limiti download}: solo visualizzazione per le ortofoto (no download)
+    \item \textbf{Inferenza ML}: N/D
+    \item \textbf{Download}: non consentito (solo visualizzazione)
+\end{itemize}
+
+\noindent
+Offre buona risoluzione per il territorio veneto, ma la limitazione alla sola visualizzazione ne impedisce l'utilizzo per applicazioni di machine learning.
+
+\section{Confronto e considerazioni}
+La scelta della piattaforma dipende fortemente dal caso d'uso specifico. Per applicazioni di rilevamento automatico della copertura arborea tramite deep learning, i fattori determinanti sono:
+
+\begin{itemize}
+    \item \textbf{Risoluzione}: è necessario almeno z18-19 per poter identificare singoli alberi
+    \item \textbf{Compatibilità ML}: molte piattaforme vietano esplicitamente l'uso per inferenza
+    \item \textbf{Possibilità di download}: essenziale per processare le immagini localmente
+    \item \textbf{Costi}: le soluzioni ad alta risoluzione risultano spesso proibitive
+\end{itemize}
+
+\noindent
+Per questa ricerca è stato scelto MapTiler come compromesso tra qualità delle immagini (z20), permesso di utilizzo per inferenza ML e costi contenuti. Le piattaforme gratuite come Copernicus, pur essendo pienamente utilizzabili per ML, non raggiungono la risoluzione necessaria per identificare singoli alberi in contesto urbano.
+
+\section{Disclaimer}
+Tutti i marchi menzionati in questo documento appartengono ai rispettivi proprietari. La loro citazione avviene esclusivamente a scopo informativo e non implica alcuna affiliazione, approvazione o sponsorizzazione da parte dei titolari dei marchi.

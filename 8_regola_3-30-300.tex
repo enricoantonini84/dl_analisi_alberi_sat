@@ -1,0 +1,251 @@
+\chapter{Applicazione della regola del 3-30-300 e mappa degli alberi}
+I capitoli precedenti trattano l'analisi dei modelli e delle reti che, opportunamente addestrate e parametrizzate, riescono ad isolare aree verdi e alberi.\\
+La ricerca è focalizzata in particolare alla detection degli alberi presenti nel tessuto urbano, non solo per mettere a confronto e valutare le prestazioni dei modelli in se, ma anche per cercare di ricavare in maniera del tutto automatica le coordinate di ogni albero, in latitudine e longitudine, in modo da poterlo mappare su sistemi informativi quali ad esempio GIS.\\
+Il Geographic Information System (GIS) è una tecnologia che consente di analizzare dati georeferenziati per visualizzare elementi cartografici organizzati in layer sovrapposti, permettendo di ottenere rappresentazioni visuali strutturate a partire da dati grezzi \cite{gisUsgs}.
+
+\section{Regola del 3-30-300}
+L'obiettivo finale di questa ricerca è quindi quello di produrre un flusso dati, opportunamente formattato a seconda del software GIS o della soluzione implementata, che possa contenere una posizione geografica ben precisa degli alberi nella città di Verona.\\
+Questo verrà poi utilizzato per calcolare un particolare indicatore, in riferimento alla regola del 3-30-300.
+
+\subsection{Definizione}
+La regola del 3-30-300 è un principio ideato dal professor Cecil Konijnendijk, che definisce quali sono i criteri per garantire l'accesso al verde nelle città, in modo da renderle più vivibili e più sostenibili \cite{Konijnendijk2023}. I tre criteri sono:
+
+\begin{itemize}
+\item 3 alberi visibili: ogni residente dovrebbe poter vedere almeno 3 alberi dalla propria finestra.
+\item 30\% di copertura arborea nel quartiere: almeno il 30\% della superficie del quartiere dovrebbe essere coperto da alberi, considerando le chiome.
+\item 300 metri di distanza dallo spazio verde più vicino: ogni residente dovrebbe avere a disposizione un parco al massimo a 300 metri dalla propria abitazione.
+\end{itemize}
+
+\subsection{Raccolta dei dati}
+Per poter arrivare a calcolare l'indicatore 3-30-300, che è oggetto di un'altra ricerca specifica sull'argomento, non è più quindi sufficiente accontentarsi di rilevare gli alberi, ma è necessario invece creare una vera e propria mappa a partire dalle immagini satellitari, in modo da poter localizzare ogni albero in maniera distinta e con una posizione geografica.
+
+\section{Mappa degli alberi}
+I modelli fin qui analizzati, per individuare gli alberi dalle immagini satellitari, restituiscono immagini con annotazioni e bounding boxes per evidenziare confidenza e posizione degli alberi nell'immagine stessa: sarebbe possibile utilizzare questo tipo di informazioni, per individuare anche la posizione degli alberi in maniera non solo visiva ma anche geografica? Per rispondere a questo quesito è necessario prender confidenza un particolare formato di immagine, che coniuga appunto coordinate dell'immagine con dati geografici: il GeoTIFF.
+
+\subsection{TIFF e GeoTIFF}
+TIFF è un popolare formato di immagini raster, che è nato come metodo per lo scambio di immagini tra stampanti e scanner, data la sua caratteristica di poter supportare proprietà e dati correlati all'immagine stessa. Da un lato porta questo formato ad essere molto flessibile, dall'altro il fatto di poter supportare molti schemi di compressione e feature, porta TIFF ad essere complicato da usare perché l'applicazione che lo deve leggere deve poter supportare pienamente il formato \cite{tiff}.\\\\
+GeoTIFF sfrutta la flessibilità di TIFF per includere metadati relativi alla posizione geografica, diventando così uno standard de facto per le organizzazioni e la community di persone che lavorano con dati geospaziali \cite{geotiff}.\\
+Questo tipo di formato è anche supportato dai sistemi GIS.
+
+\subsection{Da JPG a GeoTIFF}
+Purtroppo in molti casi le mappe satellitari reperibili sulle piattaforme di location, commerciali o open source, sono in formato vettoriale oppure raster JPG o PNG ed è quindi impossibile utilizzare quel tipo di immagini in un contesto georeferenziato. Per questo obiettivo, le semplici immagini satellitari utilizzate per la detection degli alberi, non sono sufficienti per estrarre dati utilizzabili per fare analisi su mappe e indicatori tramite GIS.\\
+Per ovviare a questo problema ci viene in aiuto Rasterio, una libreria Python che non solo riesce a leggere i formati GeoTIFF, ma è anche in grado di manipolarli associando una specifica posizione in pixel ad una posizione spaziale in termini di coordinate latitudine/longitudine \cite{rasterio}. Rasterio si appoggia sul noto GDAL \cite{GDAL}, acronimo di Geospatial Data Abstraction Library, infatti offre l'interfaccia Python per andare a sfruttare la potente libreria in C++ che elabora i file raster.
+
+\subsection{Conversione pixel-coordinate}
+I provider di mappe satellitari solitamente offrono degli endpoint che permettono di scaricare piccole "mattonelle" di una mappa, una alla volta, chiamate tiles: sarebbe impensabile infatti scaricare l'intera mappa di una città intera. Per poter accedere alle tiles è necessario specificare tre parametri, ovvero lo zoom e le coordinate in lat/long dell'angolo nord-ovest della tile, così facendo si avrà una tile di piccole dimensioni (e.g. 512x512) ma che ha una precisa posizione geografica.\\
+Per arrivare al risultato è possibile procedere in due modi:
+\begin{itemize}
+\item Trasformare le tiles in GeoTIFF: se il modello da utilizzare per la detection degli alberi accetta in input immagini che hanno la stessa risoluzione delle tiles scaricate, è possibile trasformare in GeoTIFF direttamente l'immagine con Rasterio.
+\item Unire le tiles in un immagine più grande e convertirla in GeoTIFF: se il modello ha in input specifiche di risoluzione diverse da quelle delle tiles scaricate, allora è necessario unire tutte le immagini e poi tagliarla nelle tiles della dimensione corretta, convertendo prima in GeoTIFF l'immagine "collage" derivata dalle composizione delle altre tiles.
+\end{itemize}
+
+\subsection{Detection e generazione di GeoJSON}
+Una volta che le tiles sono state convertite in GeoTIFF è possibile procedere con l'inferenza su ogni singola tile e rapportare la posizione in pixel alla posizione geografica, operazione possibile grazie a Rasterio.\\
+Terminato il processo di detection, per poter condividere le coordinate precise degli alberi presenti nelle immagini analizzate in modo che siano fruibili da GIS, la soluzione indicata è quella di esportare un GeoJSON. Quest'ultimo è proprio un formato particolare di JSON che viene utilizzato per lo scambio di dati geospaziali: un GeoJSON può descrivere un oggetto rilevato sulla mappa come punto geografico, con in aggiunta anche delle proprietà esplicative, come ad esempio la classe dell'oggetto rappresentato o il nome.\\
+Inoltre supporta anche dei tipi di geometria, come punti, linee e poligoni, rendendolo quindi indicato anche per rappresentare ad esempio i bounding boxes restituiti da YOLO \cite{GeoJSON}.
+
+\section{Conversione in GeoTIFF con Rasterio}
+Per fare il merge e le conversioni delle tiles utilizzando Rasterio, è necessario usare Python. A differenza delle soluzioni viste in precedenza per il training dei modelli, nel caso delle operazioni con le immagini e la semplice inferenza per la detection degli alberi, non è strettamente necessario l'utilizzo di una GPU: è sufficiente lanciare gli script sulla propria macchina avendo cura di valorizzare i parametri corretti.\\\\
+Di seguito sono riportati alcuni spezzoni di codice, che costituiscono le parti importanti degli script di elaborazione delle tiles. Viene inoltre presentata la fase di inferenza con YOLO11 che, pur rappresentando una delle possibili alternative per la rilevazione degli alberi, consente di illustrare l'intero processo fino alla generazione dei file GeoJSON.
+Questo codice è responsabile del salvataggio di un immagine raster JPG o PNG, in un immagine GeoTIFF. Prima di arrivare alla funzione di salvataggio, nello script completo sono presenti una lista di comandi che servono ad estrarre dal filename il livello di zoom, latitudine e longitudine, tali righe sono tralasciate in quanto di banale implementazione.\\
+Più interessante invece è osservare come vengono convertiti questi valori in coordinate della tile, come matrice di quadrati, operazione necessaria per creare dei bounds da salvare successivamente come GeoTIFF.\\
+
+\subsection{Conversione lat/long e zoom in coordinate slippy}
+
+\begin{lstlisting}
+def deg2num(lat_deg: float, lon_deg: float, zoom: int) -> Tuple[int, int]:
+    lat_rad = math.radians(lat_deg)
+    n = 2.0 ** zoom
+    x = int((lon_deg + 180.0) / 360.0 * n)
+    y = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
+    return (x, y)
+\end{lstlisting}
+
+\noindent
+\textit{deg2num} è una funzione di conversione standard per questo tipo di operazione, in rete se ne possono trovare altre che utilizzano librerie di terze parti, ma molto importante per comprendere il meccanismo di conversione in coordinate tile.\\ 
+Questo tipo di coordinate tile sono anche chiamate "slippy" \cite{osm-slippy-map-tilenames}, che si riferisce al tipo di mappa che noi tutti consultiamo sul web, che consente di muoversi ("to slip" significa "scivolare") e ingrandire/rimpicciolire la visualizzazione, con tanto di zoom (e.g. Google Maps).\\
+La conversione di queste coordinate avviene attraverso la proiezione chiamata Web Mercator, che è una variante "digitale" della proiezione cartografica di Mercatore, cartografo e astronomo che nel XVI secolo ha convertito la superficie terrestre sferica in superficie piana, creando così le mappe che consultiamo anche ai giorni nostri.\\
+
+\subsection{Calcolo dei confini geografici}
+
+\begin{lstlisting}
+def calculateBounds(x: int, y: int, zoom: int) -> Tuple[float, float, float, float]:
+    n = 2.0 ** zoom
+    west = x / n * 360.0 - 180.0
+    east = (x + 1) / n * 360.0 - 180.0
+    
+    north_rad = math.atan(math.sinh(math.pi * (1 - 2 * y / n)))
+    north = math.degrees(north_rad)
+    
+    south_rad = math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n)))
+    south = math.degrees(south_rad)
+    
+    bounds = (west, south, east, north)
+\end{lstlisting}
+
+\noindent
+Questa parte di codice è fondamentale per trovare quelli che vengono chiamati "bounds" dell'immagine. In questo specifico caso, le tiles scaricate via api dal provider di mappe, indicano come coordinata lat/long del centro nord-ovest della tile, è necessario a questo punto isolare quali sono i bounds nei quattro punti cardinali, in modo da trovare quali sono i limiti geografici della tile:
+
+\begin{itemize}
+    \item \textit{west}: longitudine del bordo sinistro (ovest) della tile
+    \item \textit{south}: latitudine del bordo inferiore (sud) della tile
+    \item \textit{east}: longitudine del bordo destro (est) della tile
+    \item \textit{north}: latitudine del bordo superiore (nord) della tile
+\end{itemize}
+\noindent
+questi quattro bounds saranno poi necessari a Rasterio per poter creare il GeoTIFF.
+
+\subsection{Salvataggio del GeoTIFF}
+\begin{lstlisting}
+def saveGeotiff(bounds: Tuple[float, float, float, float], outputPath: str) -> bool:
+    west, south, east, north = bounds
+    outputImage = Image.new('RGB', (TILE_SIZE, TILE_SIZE))
+            
+    transform = Affine.translation(west, north) * Affine.scale((east - west) / width, (south - north) / height)
+            
+    imageArray = np.array(outputImage)
+    imageArray = np.transpose(imageArray, (2, 0, 1))
+            
+    with rasterio.open(
+        outputPath,
+        'w',
+        driver='GTiff',
+        height=height,
+        width=width,
+        count=imageArray.shape[2],
+        dtype=imageArray.dtype,
+        crs=CRS.from_epsg(4326),
+        transform=transform,
+        compress='lzw'
+    ) as dst:
+        dst.write(imageArray)
+\end{lstlisting}
+
+\noindent
+La funzione per il salvataggio dell'immagine come GeoTIFF prende in input i bounds, dalla \textit{calculate\_bounds} e l'\textit{output\_path} dove salvare l'immagine.
+Prima di tutto deve essere creata un'immagine RGB che possa contenere la tile, che viene istanziata con Pillow.\\
+L'immagine poi viene passata alla libreria Rasterio come array tramite una conversione che avviene grazie a NumPy.\\
+Rasterio, per scrivere correttamente i dati nel file GeoTIFF, si aspetta infatti un array così strutturato:
+\begin{itemize}
+    \item shape: bande, altezza, larghezza
+    \item tipo numerico: uint8, float32...
+\end{itemize}
+
+\noindent
+Per procedere con la scrittura dell'immagine, a riga 4, deve prima essere effettuata una creata una matrice di trasformazione particolare:
+\begin{itemize}
+    \item \textit{Affine.translation(west, north)}: è una trasformazione di traslazione: l'angolo superiore sinistro dell’immagine corrisponde a nord-est in coordinate geografiche.
+    \item \textit{Affine.scale(...)}: esegue uno scale dei pixel, dove ogni pixel, sull’asse orizzontale, vale \textit{(east - west) / width} gradi di longitudine, mentre ogni pixel, sull’asse y (verticale), vale \textit{(south - north) / height} gradi di latitudine.
+    \item Moltiplicazione: Ottiene una matrice affine che permette a Rasterio di collegare ogni pixel dell'immagine all’esatta posizione georeferenziata.
+\end{itemize}
+
+\noindent
+L'ultima operazione prima della scrittura del GeoTIFF consiste nella trasposizione degli assi dell'immagine. Questa modifica è necessaria poiché l'immagine RGB di Pillow utilizza il formato (altezza, larghezza, bande), mentre Rasterio richiede il formato (bande, altezza, larghezza), con il numero di bande (tre nel caso del formato RGB) specificato come primo parametro.
+Dopodichè è sufficiente invocare Rasterio, fornendo tutti i parametri necessari per far si che il GeoTIFF in output sia perfettamente compatibile con i sistemi GIS:
+\begin{itemize}
+    \item \textit{outputPath}: path del file di output
+    \item \textit{'w'}: modalità di apertura del file, in questo caso write
+    \item \textit{driver}: tipo di formato raster da utilizzare, "GTiff" è il nostro GeoTIFF
+    \item \textit{height}: numero di righe in pixel dell'immagine
+    \item \textit{width}: numero di colonne in pixel dell'immagine
+    \item \textit{count}: numero di bande dell'immagine
+    \item \textit{dtype}: tipo di dato dei pixel (es. uint8, float32)
+    \item \textit{crs}: Coordinate Reference System, in questo caso imposta il sistema WGS84 (lat/lon, standard GPS).
+    \item \textit{transform}: matrice di trasformazione affine che collega i pixel alle coordinate geografiche (bounding box + risoluzione).
+    \item \textit{compress}: algoritmo di compressione per il file
+\end{itemize}
+
+\subsection{Detection degli alberi}
+\begin{lstlisting}
+def analyzeGeotiffTreeCoverage(imagePath, modelPath, conf=0.25):
+    with rasterio.open(imagePath) as src:
+        transform = src.transform
+            
+        imageArray = src.read([1, 2, 3])
+        imageArray = np.transpose(imageArray, (1, 2, 0))
+            
+        crs = src.crs
+        width = src.width
+        height = src.height
+\end{lstlisting}
+Come già anticipato in precedenza ci sono molti modi di effettuare la detection degli alberi, è qui riportato il codice per l'inferenza con YOLO a titolo di esempio.\\
+Lo script svolge, almeno in parte, il processo inverso di trasformazione da immagine Rasterio a NumPy. Questo perché YOLO chiede in input un'immagine di tipo RGB, quindi con la matrice dei canali organizzata in maniera standard. Per la conversione viene utilizzato nuovamente Pillow.\\
+
+\begin{lstlisting}
+    model = YOLO(model_path)
+    results = model(img_array, conf=conf)
+\end{lstlisting}
+In seguito viene lanciata l'inferenza sull'immagine.\\
+Il codice per questo tipo di inferenza differisce da quello utilizzato per la semplice inferenza con YOLO. Mentre quest'ultima identifica la posizione dell'albero nell'immagine restituendo un'immagine con i bounding box evidenziati tramite OpenCV, in questo caso la posizione rilevata viene convertita in coordinate geografiche (latitudine/longitudine) corrispondenti alla localizzazione effettiva dell'albero.
+
+\begin{lstlisting}
+    for result in results:
+        if result.boxes is not None:
+            boxes = result.boxes.xyxy.cpu().numpy()
+            confidences = result.boxes.conf.cpu().numpy()
+            
+            for box, confidence in zip(boxes, confidences):
+                if confidence >= conf:
+                    x1, y1, x2, y2 = box.astype(int)
+                    
+                    centerX = (x1 + x2) / 2
+                    centerY = (y1 + y2) / 2
+                    
+                    lon, lat = transform * (centerX, centerY)
+\end{lstlisting}
+Ecco come vengono analizzati i risultati, in maniera simile a quanto visto nel capitolo YOLO ma in questo caso, grazie alla matrice di trasformazione fornita da Rasterio, la funzione riesce appunto a ricavare le coordinate geografiche dal punto preciso in pixel dell'albero rilevato nell'immagine.\\
+Arrivati a questo punto possiamo costruire, grazie a tutti i parametri raccolti dalla detection nell'immagine e dalla conversione dei pixel in lat/long, il GeoJSON che andrà ad alimentare GIS.\\
+Nel caso di DetecTree2, l'output della predizione da scrivere nel GeoJSON non è rappresentato da un punto, bensì da un poligono che delimita l'intera corona dell'albero.
+
+\subsection{Generazione GeoJSON}
+Ricavate tutte le coordinate di latitudine e longitudine degli alberi rilevati nelle immagini, l'ultimo passaggio prevede di creare il GeoJSON, seguendo questo formato per mantenere la compatibilità con i software GIS \cite{GeoJSON}:\\
+
+\begin{lstlisting}
+{
+"type": "FeatureCollection",
+"crs": {
+    "type": "name",
+        "properties": {
+            "name": "EPSG:4326"
+        }
+    },
+"features": [
+    ...
+    ]
+}
+\end{lstlisting}
+Un file GeoJSON deve specificare esplicitamente la tipologia di annotazioni contenute. In questo caso si tratta di \textit{FeatureCollection}, che indica la presenza di un array di elementi geografici quali poligoni o punti.\\
+La proprietà crs, invece, indica il tipo di coordinate che sono specificate nelle features come ad esempio EPSG:4326, conosciuto anche come WGS84, che equivale alla classica notazione di latitudine e longitudine con gradi decimali.\\
+Infine l'array di features conterrà una collezione di oggetti, ovvero i punti corrispondenti alla posizione degli alberi, che hanno questo formato:\\
+
+\begin{lstlisting}
+{
+    "type": "Feature",
+    "geometry": {
+        "type": "Point",
+        "coordinates": [
+          10.986155775846253,
+          45.445288495847386
+        ]
+    },
+    "properties": {
+        "tree_id": 0,
+        "confidence": 0.810298502445221,
+        "image_name": "image.tif",
+        "image_path": "/data1/data2/image.tif",
+        "source_crs": "EPSG:4326",
+        "bbox_x1": 600,
+        "bbox_y1": 84,
+        "bbox_x2": 634,
+        "bbox_y2": 123,
+        "pixel_x": 617.0,
+        "pixel_y": 103.5
+    }
+}
+\end{lstlisting}
+Fondamentale è la dichiarazione del type "Feature", dove viene specifiato il tipo di feature geografica, in questo caso Point, con le relative coordinate nel formato dichiarato dal parametro del json dedicato.\\
+Inoltre è possibile in un GeoJSON dichiarare delle properties custom, che contengono dati affini alla feature dichiarata. Nel caso di YOLO ad esempio ha senso riportare un id numerico dell'albero rilevato, il livello di confidence, il path dell'immagine e le coordinate delle bounding boxes.\\
+E' importante sottolineare che le properties non sono comunque obbligatorie, soltanto il tipo e la geometria della feature lo sono.
+
+\section{Risultato su QGIS}
+Importando il GeoJSON così generato su QGIS, un software GIS open source, gli alberi rilevati appaiono come punti georeferenziati sulla mappa, permettendo di visualizzare la distribuzione della copertura arborea.

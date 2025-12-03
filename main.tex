@@ -1,0 +1,207 @@
+\documentclass[a4paper,11pt,oneside]{scrbook}
+
+% --- Language and encoding ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english,italian]{babel}  % italiano come lingua principale
+
+% --- Modern fonts and micro-typography ---
+\usepackage{lmodern}
+
+% --- Page geometry ---
+\usepackage{geometry}
+\geometry{
+    left=25mm,
+    right=25mm,
+    top=28mm,
+    bottom=28mm
+}
+
+% --- Graphics ---
+\usepackage{graphicx}
+\usepackage{subcaption}
+\graphicspath{{images/}}
+\usepackage{float}
+
+% --- Modern lists ---
+\usepackage{enumitem}
+
+% --- Code ---
+\usepackage{listings}
+\usepackage[dvipsnames]{xcolor}
+\lstset{
+  frame=tb,
+  language=Python,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\footnotesize\ttfamily},
+  numberstyle=\tiny\color{lightgray},
+  keywordstyle=\color{RoyalBlue},
+  stringstyle=\color{Cyan},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3,
+  numbers=left    
+}
+
+% --- Color and links ---
+\usepackage{scrhack}
+\definecolor{modernblue}{HTML}{1A3A5E}
+
+% --- Tabular ---
+\usepackage{tabularx,ragged2e}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+
+% --- Additional packages ---
+\usepackage{setspace}
+\usepackage{tocloft}
+\usepackage{amsmath}
+\usepackage{dirtytalk}
+\usepackage{comment}
+
+% --- Modern headers/footers ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+
+% --- Chapter formatting ---
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+{\normalfont\huge\bfseries}
+{\hfill\fontsize{50}{50}\selectfont\thechapter\hspace{0.5cm}\colorbox{black}{\makebox[1cm][c]{\phantom{M}}}}
+{0pt}
+{\Huge\raggedleft}
+
+% --- Section formatting ---
+\titleformat{\section}
+{\normalfont\Large\bfseries}
+{\thesection}
+{1em}
+{}
+
+\titleformat{\subsection}
+{\normalfont\large\bfseries}
+{\thesubsection}
+{1em}
+{}
+
+\titleformat{\subsubsection}
+{\normalfont\normalsize\bfseries}
+{\thesubsubsection}
+{1em}
+{}
+
+% --- Configurazione sommario compatto ---
+\renewcommand{\cftchapfont}{\normalfont}
+\renewcommand{\cftchappagefont}{\normalfont}
+\setlength{\cftbeforechapskip}{0.3em}
+\setlength{\cftbeforesecskip}{0.1em}
+\setlength{\cftbeforesubsecskip}{0em}
+
+% --- Index support ---
+\usepackage{imakeidx}
+\makeindex
+
+% --- Bibliography ---
+\usepackage{csquotes}
+\usepackage[
+    backend=biber,
+    style=numeric,
+    natbib=true,
+    sorting=none
+]{biblatex}
+\addbibresource{bibliography.bib}
+
+% --- Links (load last) ---
+\usepackage[hidelinks]{hyperref}
+
+% --- Title and meta ---
+\title{\textbf{Analisi tree-cover tramite immagini satellitari}}
+\author{Enrico Antonini}
+\date{\today}
+
+% --- Document settings ---
+\doublespacing
+\pagenumbering{arabic}
+
+\begin{document}
+
+% --- Configure headers/footers ---
+\fancyhf{} % Clear all headers and footers
+\fancyhead[L]{\footnotesize\leftmark}
+\fancyfoot[L]{\footnotesize\parbox{1.0\textwidth}{%
+    Studio e utilizzo di tecniche di deep learning per la rilevazione\\
+    automatica della copertura arborea da immagini satellitari}}
+\fancyfoot[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% ========== FRONTESPIZIO ==========
+\input{0_frontespizio.tex}
+
+\cleardoublepage
+\null
+\thispagestyle{empty}
+\cleardoublepage
+
+\input{1_dedica.tex}
+
+\cleardoublepage
+\null
+\thispagestyle{empty}
+\cleardoublepage
+
+% Sommario compatto
+\begin{spacing}{1.0}
+\tableofcontents
+\end{spacing}
+
+\input{2_introduzione}
+
+\cleardoublepage
+\null
+\thispagestyle{empty}
+\cleardoublepage
+
+\input{3_dettagli_tecnici}
+
+\cleardoublepage
+\null
+\thispagestyle{empty}
+\cleardoublepage
+
+\input{4_yolo}
+
+\cleardoublepage
+\null
+\thispagestyle{empty}
+\cleardoublepage
+
+\input{5_detectree}
+\input{6_detectree2}
+
+\input{7_segformer}
+
+\input{8_regola_3-30-300}
+\input{9_conclusioni}
+\input{10_servizi_mappe_satellitari}
+
+\cleardoublepage
+\printindex
+\cleardoublepage
+\printbibliography
+
+\cleardoublepage
+\null
+\thispagestyle{empty}
+\cleardoublepage
+
+\input{99_ringraziamenti}
+
+\cleardoublepage
+\null
+\thispagestyle{empty}
+\cleardoublepage
+
+\end{document}

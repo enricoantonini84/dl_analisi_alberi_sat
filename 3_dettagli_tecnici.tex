@@ -1,0 +1,191 @@
+\chapter{Dettagli tecnici}
+
+\section{Cos'è una rete neurale}
+Una rete neurale è un modello che simula il funzionamento della mente umana, in modo da poter imparare a riconoscere immagini e testi, grazie ad un processo di apprendimento (training) per poi successivamente dare dei feedback e delle previsioni su elementi simili o della stessa classe, con un processo chiamato inferenza.\\
+È bene specificare che non tutti i modelli sono basati su reti neurali, esistono infatti algoritmi non neurali che possono simulare ragionamenti cognitivi umani, come gli alberi decisionali: essi sono l'esempio perfetto di modelli categorizzati come machine learning, in quanto apprendono dai dati di addestramento forniti in input, che non sono composti da layers e nodi come nelle tradizionali reti neurali \cite{Choi2020}.\\
+Nello specifico le reti neurali multi livello, o multi layer, trattate in questo capitolo sono un particolare sottoinsieme del machine learning chiamato deep learning.
+
+\subsection{Layers}
+Un modello è composto da diversi livelli organizzati in sequenza, chiamati layers, formati a loro volta da nodi che possono essere considerati come neuroni artificiali.\\
+Semplificando il più possibile, i layers possono essere di input, di output oppure intermedi:
+\begin{itemize}
+\item input layer: prende i dati in input. Se usiamo ad esempio un modello YOLO, sarà un'immagine.
+\item hidden layers: ricevono l'input, elaborano le informazioni attraverso calcoli e funzioni matematiche e passano i risultati al successivo strato. Sono gli strati interni al modello.
+\item output layer: restituisce la prediction finale del modello. Nel nostro caso, ci dice se ha trovato oggetti all'interno dell'immagine, specificando eventualmente anche informazioni aggiuntive come classi e livello di confidenza.
+\end{itemize}
+Questa struttura a layers permette al modello di trasformare e combinare i dati, imparando a riconoscere pattern e oggetti. Ogni layer aggiunge una trasformazione nuova, consentendo al modello di apprendere funzioni sempre più sofisticate \cite{ibm_layers}.
+
+\subsection{Weights}
+Ad ogni collegamento tra nodi di layer consecutivi è associato un peso (weight), ovvero un valore numerico che indica la forza della connessione tra due nodi. Durante l'addestramento, questi pesi vengono continuamente aggiornati in modo che, grazie al passaggio dei dati attraverso i layers, il modello possa combinare gli input in modo sempre più efficace per riconoscere pattern e fare previsioni accurate.\\
+I pesi lavorano su informazioni e dati, che vengono trasmessi da un nodo al successivo. Nello specifico un peso alto amplifica le informazioni, mentre un peso basso le attenua: è proprio l'ottimizzazione di questi pesi che permettono al modello di migliorare la sua precisione e la capacità predittiva \cite{googlemlglossary_weights}.
+
+\section{Dataset}
+Un dataset è una raccolta strutturata di dati, nel caso di questa ricerca è formata prevalentemente da immagini con annotazioni ed è organizzata per essere analizzata e processata da algoritmi di machine learning.
+I dataset possono essere composti da:
+\begin{itemize}
+    \item Training set: immagini usate per il training del modello.
+    \item Validation set: immagini utilizzate durante l'addestramento, per valutare le prestazioni del modello su dati non visti e per effettuare la messa a punto dei parametri.
+    \item Test set: un insieme di immagini utilizzate alla fine dell'addestramento, per valutare le prestazioni finali del modello, su dati completamente nuovi che non sono stati utilizzati per il training.
+\end{itemize}
+Il validation set è opzionale, ma molto utile per migliorare la qualità del training del modello.
+
+\subsection{Importanza del dataset}
+La qualità e la coerenza dei dati nel dataset sono importanti quanto l'algoritmo stesso: da un dataset con immagini pulite e annotazioni ben fatte è possibile fare training (o transfer learning) ed addestrare un modello accurato.\\
+Il dataset, inoltre, deve contenere immagini nel formato previsto dalle specifiche del modello (e.g. YOLO in 640x640)\\
+La suddivisione in training, validation e test set permette di sviluppare un modello robusto e testarne le performance su dati “mai visti prima”\\
+
+\subsection{Annotazione manuale}
+Per costruire un dataset adatto al tema di riconoscimento degli oggetti, che è scopo di questa ricerca, è necessario avere delle immagini con risoluzione, numero di canali (e.g. RGB) e formato, che siano compatibili con il modello da addestrare.\\
+A seconda della rete neurale da utilizzare poi, le immagini devono essere corredate da un file che descrive il contenuto o l'oggetto da identificare: ad esempio per i modelli YOLO ogni immagine è associata ad un file, che contiene coordinate e classe di ogni oggetto presente all'interno dell'immagine.\\
+A questo punto la rete neurale che sta alla base del modello, durante la procedura di training, imparerà a distinguere gli oggetti che abbiamo annotato nel dataset e proprio grazie a questa procedura, riuscirà poi a valutare in maniera più o meno precisa, a seconda del tipo di rete e della qualità del dataset di addestramento, se una qualsiasi immagine fornitagli in input contiene o meno oggetti simili a quelli annotati, fornendo anche dei valori che indicano la stima di quanto è preciso quel rilevamento.\\
+Piattaforme come Roboflow offrono un editor dove è possibile annotare le immagini e contestualmente generare i files con le annotazioni.
+
+\subsection{Ricerca di un dataset con immagini già annotate}
+Una seconda soluzione è quella di utilizzare dataset pre-annotati, che possono essere scaricati da Roboflow o da repository GitHub.\\
+In questo caso è fondamentale sincerarsi che il dataset sia stato creato appositamente per la rete che si vuole addestrare e che le annotazioni siano corrette. In generale i dataset resi disponibili online, se provenienti da progetti di computer vision e documentate in articoli di ricerca, sono piuttosto affidabili.
+
+\section{Training}
+Per permettere ad un modello di machine learning di imparare a riconoscere pattern o feature significative in un immagine, è necessario effettuare un'operazione chiamata training, che è di fatto un vero e proprio addestramento del modello.\\
+Senza un adeguato addestramento la rete neurale non avrebbe una strategia per interpretare i dati e svolgere il compito desiderato.\\\\
+Il training viene effettuato partendo da un dataset, ovvero una collezione di immagini con le relative "annotazioni": in ogni immagine di un dataset viene evidenziata la posizione e la classe dell'oggetto, che è indispensabile per addestrare la rete a riconoscere successivamente questi oggetti nelle immagini che dovremo classificare.\\
+Ci sono due tipologie di addestramento che possono essere eseguite su una rete, il training completo (from scratch) e il transfer learning \cite{isong2025buildingefficientlightweightcnn}.
+
+\subsection{Training from scratch}
+In questo tipo di training, il modello viene addestrato completamente sui dati annotati senza partire da pesi pre-trainati. I pesi (weights) sono valori numerici che vengono assegnati alle connessioni fra i nodi della rete neurale: ogni volta che un input arriva ad un nodo, viene moltiplicato per il peso associato a quella specifica connessione, la somma di tutti questi input ne determinerà poi i valori in output.\\
+Durante la fase di training della rete neurale, i pesi vengono costantemente aggiornati mediante algoritmi di apprendimento, in modo da minimizzare la differenza fra le previsioni del modello e i valori reali.\\
+Partendo da zero, ovvero from scratch, questi pesi non sono definiti ma vengono assegnati dei numeri casuali che, soltanto durante il processo di training, verranno modificati per ottimizzare le prestazioni.\\
+Questo tipo di training è molto valido quando abbiamo a disposizione un numero considerevole di dati annotati e l'utilizzo del modello è molto specifico.
+
+\subsection{Transfer learning}
+Quando il dataset è limitato, o nel caso in cui l'obiettivo sia quello di riuscire a risparmiare tempo e risorse, è possibile partire da un modello pre-trainato.\\
+L'idea è quella di "trasferire" ad un modello provvisto di pesi e con dei parametri di precisione già significativi, la parte di conoscenza necessaria per riconoscere i dati annotati nel nostro dataset, si inizia quindi dal modello pre-trainato e lo si adatta (fine-tuning) al target, spesso “freezando” i primi layer e ottimizzando solo quelli finali.
+
+\section{Parametri di training}
+Qui di seguito sono elencati alcuni parametri, che normalmente vengono specificati in fase di addestramento del modello: sono utili per affinare il processo di apprendimento e vengono anche chiamati "Hyperparameters".\\
+Questi parametri sono piuttosto generici, perchè comuni a tante procedure di addestramento anche fra algoritmi diversi \cite{googlemlglossary}.\\
+
+\subsection{Epoch}
+Un epoch rappresenta un passaggio completo del dataset attraverso l'algoritmo in fase di learning, è un concetto fondamentale nel training delle reti neurali, che permette al modello di imparare continuando costantemente a rivedere le stesse immagini, o i medesimi elementi del dataset \cite{ultralytics_epoch}.\\
+Il numero di epoch si specifica solitamente in ogni procedura di training e determina quante volte il modello imparerà dal set di train del dataset, influenzando le performance e la qualità del modello.\\
+Scegliere il numero di epoch corretto è molto importante perché se viene scelto in maniera errata può creare due problemi:
+
+\begin{itemize}
+    \item Underfitting: il modello non è stato trainato per un numero sufficiente di epochs. Le performances non sono adeguate né sul set di training né su quello di test
+    \item Overfitting: il modello è stato trainato per troppi epochs. In questo caso memorizza i dati di training in maniera troppo approfondita e perde le sue abilità di analizzare i nuovi dati. Ha una precisione eccellente sul training set ma scarsa sul dataset di validazione.
+\end{itemize}
+
+Una tecnica comune per evitare l'overfitting è quella dell'early stopping, nella quale il training viene fermato quando le performances sul set di validazione smettono di migliorare. A volte è possibile specificare un parametro chiamato patience, che specifica dopo quanti epochs "non migliorativi" il training deve fermarsi.
+
+\subsection{Batch size}
+La dimensione del batch è un altro parametro importante che definisce il numero di campioni processati prima che i parametri interni del modello vengano aggiornati. I campioni sono in questo caso le immagini, che vengono usate per il training del modello.\\
+Dividendo il set di training in batch, ovvero dei subset ridotti, evitando di processare tutti i dati simultaneamente, che potrebbe essere computazionalmente problematico in termini di velocità di elaborazione e memoria occupata.\\
+Scegliere un batch size troppo basso però, implica una ridotta velocità di training, in quanto i pesi del modello vengono aggiornati molto più frequentemente.
+
+\subsection{Loss function}
+È una funzione matematica fondamentale nel machine learning, che misura quanto le prediction generate dal modello si discostano dai valori reali.
+\begin{equation*}
+\mathrm{Loss} = f(prediction, realValue) 
+\end{equation*}
+La funzione è chiamata sia durante il training per ogni batch di immagini, che in fase di validazione alla fine di ogni epoch. Il valore poi restituito dalla loss function, durante il training, può venire utilizzato da degli ottimizzatori che permettono di aggiornare i parametri, come ad esempio i pesi, ad ogni epoch come una sorta di "pilota automatico".
+
+\section{Hardware necessario per il training}
+I modelli di machine learning hanno bisogno di particolari risorse hardware per poter essere addestrati in quanto, l'utilizzo di un normale computer desktop che sfrutta la sola CPU per "istruire" il modello, è troppo limitante non tanto per la frequenza ma per l'insufficiente numero di core che ha a bordo, è invece necessario avvalersi di hardware che permetta il calcolo parallelo: per questo compito ci vengono in aiuto le GPU.\\
+Queste ultime infatti, soprattutto quelle prodotte da Nvidia, sono compatibili con la piattaforma di calcolo parallelo CUDA (Compute Unified Device Architecture) che sfrutta le centinaia o le migliaia di core presenti a bordo dei chip, riuscendo quindi a svolgere massivamente calcoli matematici e gestire enormi quantità di dati \cite{whatiscuda}.\\
+È importante sottolineare che i modelli di machine learning più pesanti necessitano di molta RAM, ed è quindi doveroso dotarsi di GPU con sufficiente memoria video (VRAM) a bordo, per fare in modo che il modello possa rimanere completamente residente in memoria durante le procedure di training o inferenza.
+
+\subsection{Bare metal}
+Per utilizzare CUDA su una macchina locale è necessario acquistare l'hardware fisico, che generalmente in ambito consumer è una scheda di espansione su bus PCIe che permette il collegamento di uno o più monitor ed ha il compito di accelerare calcoli che sarebbero troppo pesanti per la CPU, come ad esempio calcolo di poligoni e shader nei giochi oppure addestramento/inferenza su modelli di machine learning.\\
+In ambito industriale invece, trovano spazio delle soluzioni non progettate per l'ambito ludico, che sono invece commercializzate come acceleratori di calcolo parallelo.\\
+Esistono anche delle versioni ridotte su sistemi embedded/single board computer (e.g. Jetson Orin) che permettono l'utilizzo di CUDA on the edge, per valutare ad esempio le immagini provenienti da una fotocamera.\\
+Tutte queste soluzioni implicano l'acquisto di hardware dedicato, che deve essere configurato correttamente per poter funzionare e, soprattutto i modelli di GPU più prestanti con VRAM elevata hanno un costo importante.\\
+Per il training e l'inferenza è solitamente utilizzato Python, in quanto provvisto di librerie adatte a lavorare con i modelli (come Pytorch o TensorFlow) ed è necessario che venga sviluppato il codice dedicato.
+
+\subsection{Risorse cloud}
+Una vera alternativa all'elaborazione on premise è quella di utilizzare i servizi in cloud che comportano un risparmio in termini di costo hardware, in quanto è tutto demandato alla piattaforma gestita, ma implicano comunque la necessità di lavorare a partire da sorgenti Python per il training o inferenza con i modelli.\\
+Solitamente è previsto un costo mensile preventivabile con un calcolatore, che varia a seconda del servizio e dell'hardware messo a disposizione dalla piattaforma cloud.\\
+I provider più famosi sono Google Cloud Platform, AWS EC2 e Azure VMs, che offrono macchine virtuali Linux o Windows con GPU.\\
+In alternativa, ad un costo inferiore, sono disponibili servizi come Google Colab che supportano solo linguaggi di scripting (e.g. Python, R) offrendo ad un canone mensile l'accesso ad un numero di ore di elaborazione CPU+GPU. Sono un buon compromesso per lavorare con i modelli di machine learning.\\
+
+\subsection{Soluzioni all-in-one}
+Una soluzione che sta prendendo piede negli ultimi anni è quella di affidarsi ai servizi all-in-one che, a fronte di un canone mensile, prevedono la gestione del dataset e la creazione del modello tramite training. Questo tipo di servizi offre anche la possibilità di accedere ai modelli online, tramite servizi REST, con degli endpoint che permettono di fare inferenza senza doversi preoccupare di sviluppare script da eseguire sulla propria macchina o sul cloud.\\
+Tra i servizi più diffusi ci sono sicuramente Roboflow e Ultralytics.
+
+\section{Modelli a confronto}
+Al momento della stesura di questo documento (ca. fine 2025) sono disponibili diverse soluzioni, che promettono di essere efficaci nell'individuare oggetti all'interno di un immagine, in maniera più o meno elaborata.\\
+Al contrario delle reti neurali che nella prima metà degli anni venti sono diventate popolari (e.g. ChatGPT, Gemini, Llama o Grok) per essere molto efficaci con il linguaggio naturale (NLP) data la loro natura di LLM, acronimo di Large Language Model, in questo caso specifico la ricerca tratterà di reti neurali per la computer vision, come ad esempio le reti convoluzionali ricorsive e non.
+
+\subsection{AdaBoost}
+È un algoritmo di machine learning che combina più modelli chiamati weak learners per creare un modello evoluto più accurato \cite{bejabattais2023overviewadaboostreconciling}. I weak learners sono 
+modelli o algoritmi leggermente più performanti di una predizione casuale, ad esempio in una classificazione binaria raggiungono poco più del 50\% di precisione.
+Facendo training sequenziale su questi weak learners e combinandoli, il modello finale non sarà altro che la somma pesata di tutti i modelli più piccoli, risultando più performante e robusto.\\
+Nel caso di AdaBoost il processo è adattivo perchè corregge gli errori fatti nei primi round di training, rendendolo così più efficace.\\
+È importante, come anticipato in precedenza, sottolinare che AdaBoost non è una rete neurale ma, per sua natura combinando modelli più piccoli, è "semplicemente" un albero decisionale.\\
+DetecTree utilizza AdaBoost per classificare, pixel by pixel, cosa fa parte di un albero e cosa no.
+
+\subsection{CNN}
+Alcuni algoritmi di object detection sono basati su una rete neurale convoluzionale (CNN) \cite{oshea2015introductionconvolutionalneuralnetworks}, che viene utlizzata per permettere la detection di oggetti nell'immagine. Essa è uno specifico tipo di algoritmo di deep learning, studiato principalmente per analizzare dati visuali, come immagini e video. Questi algoritmi sono catalogati come deep learning, appunto per la loro caratteristica di avere più livelli. \\
+In pratica mima la funzionalità della corteccia cerebrale umana, estraendo automaticamente determinate caratteristiche o oggetti, come ad esempio gli alberi, a partire dall'immagine: questo è possibile tramite filtri chiamati convoluzionali, che vanno alla ricerca di specifici pattern.\\
+Il nome dei filtri deriva dal tipo di operazione che viene effettuata sulle immagini in input, ovvero la convoluzione: si tratta di un'operazione matematica che in termini semplici consiste nel far scorrere un filtro (detto anche kernel) sopra l'immagine in input. Il filtro esamina l'immagine e calcola una combinazione pesata dei valori dei pixel, producendo una valore in output. Ripetendo il processo più volte si crea una nuova immagine che è in grado di mettere in evidenza caratteristiche specifiche come bordi, angoli o texture: in sostanza permette quindi alla rete di riconoscere pattern visivi in modo efficiente mantenendo anche la posizione spaziale degli oggetti rilevati.
+Un esempio di CNN è la rete YOLO.
+
+\subsection{R-CNN}
+In alcuni casi le reti possono essere anche R-CNN, ovvero Region-based CNN che, come le normali reti convoluzionali, sono anch'esse algoritmi di deep learning.\\
+Anche in questo caso sono modelli progettati per la object detection: prima vengono generati molteplici proposte di regioni (aree potenzialmente contenenti oggetti) tramite specifici algoritmi, quindi viene applicata una CNN a ciascuna regione per estrarne caratteristiche, e infine vengono classificati e localizzati gli oggetti in quelle regioni \cite{r-cnn}. In sostanza non vengono applicati filtri a tutta l'immagine, ma le operazioni di convoluzione sono effettuate a livello locale in regioni distinte.\\
+Fra le R-CNN possiamo trovare DetecTree2.
+
+\subsection{ViT}
+I modelli LLM commerciali citati all'inizio di questa sezione, che negli ultimi anni hanno subito un'evoluzione incredibile, hanno introdotto un'architettura chiamata transformer.\\
+Al contrario delle (R)CNN viste in precedenza, i transformer si basano su meccanismi di self-attention dove parte del dato di input, come una parola o un immagine, viene confrontata e pesata rispetto a tutte le altre parti per capire quali sono più rilevanti nel contesto corrente. In questo modo il modello può valutare l’importanza delle diverse parti di una sequenza, indipendentemente dalla loro posizione \cite{vaswani2023attentionneed}. Un Transformer è costituito da:
+\begin{itemize}
+\item Encoder: converte il testo in input in una rappresentazione intermedia. L'encoder è una rete neurale.
+\item Decoder converte la rappresentazione intermedia in un output testuale. Anche il decoder è una rete neurale.
+\end{itemize}
+Recentemente l'architettura transformer è stata applicata anche alle reti dedicate alla visione, creando così i Vision Transformer (ViT): invece di trattare l'immagine come una griglia di pixel, come succede per le (R)CNN, il ViT suddivide l'immagine in piccoli pezzi di dimensioni fisse, che vengono poi trasformati in vettori (embeddings), vengono arricchiti con informazioni sulla posizione spaziale e quindi passati a un encoder transformer, che utilizza meccanismi di self-attention per catturare relazioni sia locali sia globali tra le diverse patch.\\
+Questo procedimento permette di migliorare le prestazioni in compiti come classificazione, segmentazione e riconoscimento di oggetti, specialmente con grandi dataset di addestramento.
+Segformer è una rete neurale basata su questo algoritmo di deep learning.
+
+\section{Misurazione delle performances}
+I modelli, una volta trainati, possono essere valutati sulla base di alcune specifiche metriche, che sono comuni anche fra reti neurali diverse.\\
+Qui sotto sono elencate diverse metriche generali, le metriche specifiche e dedicate a modelli precisi, sono invece riportate nei capitoli successivi.
+
+\subsection{Precision}
+Indica la percentuale di oggetti individuati dal modello che sono effettivamente corretti. In altra parole indica, su tutte le volte in cui il modello ha trovato un oggetto in un immagine, quante volte ha effettivamente "avuto ragione".
+Un’alta precisione significa pochi falsi positivi.
+
+\subsection{Recall}
+Misura la percentuale di oggetti realmente presenti nell’immagine che sono stati trovati dal modello, in sostanza ci restituisce un valore relativo al numero di oggetti riconosciuti rispetto a quanti sono stati correntemente annotati come buoni nel dataset.
+Un recall alto equivale a pochi falsi negativi.
+
+\subsection{Intersection over Union (IoU)}
+Metrica fondamentale della computer vision nel riconoscimento degli oggetti, che misura quanto due rettangoli (boxes) si sovrappongono tra loro rispetto alla loro estensione.
+Si utilizza in pratica per confrontare quanto la bounding box predetta, coincide con la bounding box reale (chiamata ground truth).
+\begin{equation*}
+IoU=\frac{areaIntersezione}{areaUnione},\quad IoU \in [0,1]
+\end{equation*}
+ad esempio un IoU di 0.6 indica che due box hanno il 60\% di area in comune \cite{mAPV7}.\\
+La soglia di IoU è un valore di input del modello, che stabilisce quanto deve essere "centrato" un oggetto per essere considerata corretta la previsione: più alto è il valore, più rigorosa è la valutazione.
+
+\subsection{Mean Average Precision (mAP)}
+Parametro utilizzato per misurare le performance dei modelli di computer vision, come ad esempio YOLO o DetecTree2. La mAP rappresenta la precisione media su diverse soglie di IoU, di tutte le classi presenti nel dataset: viene calcolata come la media aritmetica dei valori di precision di tutte le classi, fornendo una misura complessiva della capacità del modello di classificare correttamente gli oggetti.
+E' fondamentale per comparare anche modelli diversi che si occupano di svolgere lo stesso task, oppure anche versioni diverse dello stesso modello.
+\begin{equation*}
+\mathrm{mAP} = \frac{1}{N} \sum_{i=1}^{N} AP_i,\quad mAP \in [0,1]
+\end{equation*}
+con N numero di classi e APi che corrisponde alla precisione media della classe i \cite{mAPV7}.
+
+\subsection{Mean Average Precision 0.50 (mAP50)}
+Metrica che calcola la media dell'Average Precision su tutte le classi, utilizzando una soglia di IoU fissa di 0.50. Una predizione viene considerata corretta (vero positivo) solo se la sovrapposizione con la ground truth è almeno del 50\%.\\
+Questa metrica fornisce una valutazione delle prestazioni del modello con una soglia di accettazione tollerante, ed è utile per applicazioni dove è sufficiente una localizzazione degli oggetti approssimativa.
+
+\subsection{Mean Average Precision 0.50-0.95 (mAP50-95)}
+Metrica che calcola la media dell'Average Precision considerando multiple soglie di IoU, da 0.50 a 0.95 con incrementi di 0.05 (totale 10 soglie). Per ogni soglia viene calcolata la mAP, poi si effettua la media di tutti questi valori.\\
+Questa metrica è molto più rigorosa della mAP50, perché valuta la precisione del modello su diversi livelli di difficoltà, richiedendo sia localizzazioni approssimative che molto precise. Un valore elevato di mAP50-95 indica che il modello è accurato in tutti i contesti, dalla detection approssimativa a quella di precisione millimetrica.
+
+\subsection{F1 score}
+F1 è la media armonica di precision e recall
+\begin{equation*}
+F1 = 2 *\frac{precision + recall}{precision * recall},\quad F1 \in [0,1]
+\end{equation*}
+questo valore bilancia precision e recall, penalizzando fortemente il caso in cui uno dei due è molto basso, infatti più ci si avvicina ad 1 meno si hanno falsi positivi e falsi negativi.
+Questo valore è molto importante perché ci indica quanto un modello è preciso e completo nelle sue predizioni.
+

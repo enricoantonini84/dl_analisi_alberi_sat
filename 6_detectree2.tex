@@ -1,0 +1,155 @@
+\chapter{Detectree2}
+Questo algoritmo di deep learning non è una diretta evoluzione di DetecTree, in quanto l'implementazione non è derivata da AdaBoost ma è invece una vera e propria rete neurale convoluzionale region based (R-CNN) \cite{detectree2}.\\
+Alla base di Detectree2 vi è Detectron2, una piattaforma avanzata ideata dal FAIR (Facebook AI Research), costruita sul framework PyTorch \cite{wu2019detectron2}.
+
+\section{Principio di funzionamento}
+Detectree2 ha l'obiettivo di rilevare, all'interno di un immagine satellitare, gli alberi contenuti in essa cercando l'insieme dei rami e delle foglie che si trovano nella parte superiore del tronco, ovvero la corona.\\
+Per poterlo fare è stato adattato l'algoritmo R-CNN di Detectron2, che ha modelli pretrainati su cui è possibile effettuare transfer learning ed "aggiungere" quindi la conoscenza necessaria per poterli impiegare nel rilevamento arboreo.
+
+\subsection{Detectron2}
+Alla base di Detectron2 vi è una R-CNN-FPN, ovvero una rete convoluzionale region based con Feature Pyramid Network, che utilizza una piramide di feature map a più risoluzioni. Questo permette di migliorare il rilevamento degli oggetti, estraendo rappresentazioni dell’immagine a diversi livelli di dettaglio, facilitando così il riconoscimento di oggetti di diverse dimensioni.\\
+Una feature map è una rappresentazione prodotta da uno strato convoluzionale di una CNN: durante l’elaborazione, la rete applica dei filtri ai dati in input per rilevare specifiche caratteristiche, come ad esempio bordi, texture o pattern particolari.\\
+Schematicamente l'architettura della rete è riassumibile in tre blocchi \cite{detectron2_modeling}:
+
+\begin{itemize}
+    \item Backbone Network: estrae le feature map dall'immagine di input con differenti risoluzioni tramite FPN.
+    \item Region Proposal Network (RPN): analizza la posizione delle feature map per rilevare le regioni contenenti gli oggetti, restituendo bounding box e valori di confidence.
+    \item Box Head: taglia e ridimensiona le feature map corrispondenti alle regioni rilevate, elaborandole per classificare l'oggetto ed affinare ulteriormente la posizione delle bounding box.
+\end{itemize}
+
+\subsection{Modifiche introdotte da Detectree2}
+Detectree2 aggiunge alla libreria di Detectron2 la funzionalità di gestire input e output georeferenziati e di delineare le corone degli alberi in maniera individuale, tramite la generazione di maschere che circoscrivono esattamente l'oggetto nell'immagine.\\
+Si incrementa così la precisione e le prestazioni nella segmentazione delle chiome, ottenendo quindi un miglioramento rispetto alla detection offerta da Detectron2.
+
+\section{Tipologia di modello utilizzato}
+Anche in questo caso, come per DetecTree, la repository del progetto GitHub mette a disposizione più modelli pre-trained \cite{detectree2_models}.\\
+I modelli sono stati addestrati con diversi dataset, come specificato nel readme della repo, è necessario selezionare quindi il modello più affine al tipo di alberi da rilevare. Nel caso specifico di questa ricerca, il modello utilizzato è il \textit{urban\_trees\_Cambridge20230630} che è stato appunto addestrato per rilevare corone arboree in ambito urbano.
+
+\section{Parametri}
+I parametri per Detectree2 sono quelli comuni alle reti neurali convoluzionali, come quelli già visti per YOLO. Infatti il modello Cambridge, riporta fra le sue statistiche alcuni parametri che sono stati introdotti nel capitolo dei dettagli tecnici:
+
+\begin{itemize}
+    \item Learning rate: 0.01709
+    \item Workers: 6
+    \item Batch size: 623
+    \item AP50: 62.0
+\end{itemize}
+
+\noindent
+In virtù delle considerazioni viste nei capitoli precedenti, un AP50 di 62.0 può essere considerato un buon risultato: indica che il modello è in grado di localizzare gli oggetti per il quale è stato addestrato, con un buon equilibrio tra precisione e recall.
+
+\section{Inferenza}
+Dopo aver scaricato il modello appropriato, in questo caso il Cambridge, è possibile procedere con l'inferenza.\\ 
+Secondo i requisiti elencati sulla repository GitHub, perché la detection sia precisa, è necessario che le immagini abbiano lo stesso formato di quelle utilizzate in fase di training, nelle quali sono state usate tiles quadrate che coprono c.a. 200m. Dopo una rapida stima, considerato il rapporto coordinate/pixels delle immagini fornite dal provider e tenuto conto anche del livello di zoom impostato, la risoluzione corrisponde circa a 364x364. A questo parametro si aggiunge anche, come requisito fondamentale, l'ordine dei canali che deve essere BGR.\\
+Qui di seguito sono elencate alcuni parti di codice dedicate all'inferenza con questo modello specifico.
+
+\subsection{Configurazione iniziale}
+\begin{lstlisting}
+from detectron2.engine import DefaultPredictor
+from detectree2.models.train import setup_cfg
+    
+def init(modelPath: str, outputFolder: str):    
+    cfg = setup_cfg(update_model=modelPath)
+    cfg.OUTPUT_DIR = outputFolder
+    cfg.MODEL.DEVICE = "cpu"
+    
+    predictor = DefaultPredictor(cfg)
+\end{lstlisting}
+
+\noindent
+Nella prima parte di codice è fondamentale inizializzare correttamente Detectron2 e Detectree2. Dato che il primo sfrutta la struttura e la rete del secondo, salvo alcune feature già elencate in precedenza, è necessario importare il \textit{DefaultPredictor} di Detectron2 e la configurazione dei modelli dei Detectree2, come è visibile dalle prime due righe del listato.\\
+Nelle righe successive viene inizializzata la configurazione del modello, specificando come parametri il percorso del modello definito in \textit{update\_model}, insieme al percorso della directory di output e al tipo di dispositivo da utilizzare per l'inferenza.\\
+L'ultima riga invece riguarda l'inizializzazione del \textit{DefaultPredictor} a partire dalla configurazione dichiarata per Detectree2.
+
+\subsection{Prediction}
+\begin{lstlisting}
+import cv2
+from shapely.geometry import Polygon
+
+def predict(
+        predictor: DefaultPredictor, 
+        imagePath: str,
+        conf: float = 0.5) -> Dict[str, Any]:
+    image = cv2.imread(imagePath)
+    outputs = predictor(image)
+    
+    instances = outputs["instances"].to("cpu")
+    scores = instances.scores.numpy()
+    validIndices = scores >= conf
+    filteredScore = scores[validIndices].tolist()
+    
+    polygons = []
+    if hasattr(instances, 'pred_masks'):
+        masks = instances.pred_masks.numpy()[validIndices]
+        
+        for mask in masks:
+            contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                largestContour = max(contours, key=cv2.contourArea)
+                polygonCoords = largestContour.reshape(-1, 2).tolist()
+                
+                if len(polygonCoords) >= 3:
+                    try:
+                        crownGeometry = Polygon(polygonCoords).simplify(0.3, preserve_topology=True)
+                        if crownGeometry.is_valid and hasattr(crownGeometry, 'exterior'):
+                            exterior_coords = crownGeometry.exterior.coords
+                            coords_without_last = exterior_coords[:-1]
+                            readable_coords = []
+                            for x, y in coords_without_last:
+                                readable_coords.append([float(x), float(y)])
+                        else:
+                            polygons.append([])
+                    except:
+                        polygons.append([])
+    
+    results = {
+        "polygons": polygons,
+        "scores": filteredScore,
+        "num_detections": len(filteredScore)
+    }
+    
+    return results
+
+\end{lstlisting}
+
+\noindent
+Questa funzione è utilizzata principalmente per lanciare l'inferenza sull'immagine e trovare i poligoni che compongono le corone degli alberi. Viene restituito al chiamante della funzione un dictionary, contenente poligoni, punteggio di prediction e numero di corone rilevate.\\
+Per prima cosa viene caricata l'immagine da OpenCV, che la trasforma in un array multidimensionale in formato \textit{ndarray} di NumPy, ovvero la libreria Python per eccellenza per l'elaborazione di array multidimensionali e calcolo numerico \cite{numpy}. Questo permette all'immagine di essere trasformata in un dato che ha una shape, quindi una forma derivata dall'immagine, corredata da uno specifico tipo di dato chiamato dtype. Più in generale, nell'ambito del machine learning, questa matrice a più dimensioni è chiamata anche tensor.\\
+Successivamente è lanciata la prediction grazie al \textit{predictor} inizializzato nell'init, proprio sull'immagine in formato matriciale, che restituisce un oggetto \textit{instances} contenente i seguenti parametri rilevati dall'immagine:
+
+\begin{itemize}
+    \item \textit{pred\_masks}: matrice multidimensionale (tensor) di forma (N, H, W) dove N corrisponde al numero di elementi trovati, H altezza e W larghezza, che rappresenta una maschera per ogni oggetto trovato, quindi per ogni corona. Ogni maschera evidenzia i pixel che appartengono a quel preciso albero rilevato.
+    \item \textit{pred\_boxes}: Bounding boxes per ogni oggetto trovato, come coordinate del rettangolo che circonda la maschera, equivalente a YOLO.
+    \item \textit{scores}: Punteggio di confidenza per ogni albero rilevato.
+    \item \textit{pred\_classes}: Classe di ogni oggetto rilevato, in questo caso alberi dato che Detectree2 si limita a quelli.
+\end{itemize}
+
+\noindent
+il \textit{.to("cpu")} applicato sull'oggetto contenente le istanze rilevate, converte i tensors in un formato elaborabile da una cpu.\\
+Nelle righe 15, 16 e 16 viene applicato il filtro sulla confidence, tutto quello che non è uguale o superiore a quella soglia viene automaticamente scartato, in quanto l'array \textit{filteredScore} contiene solamente dati relativi agli alberi rilevati con una confidenza tollerata.\\\\
+Lo step successivo è poi fondamentale per estrarre le maschere degli elementi considerati validi, in quanto superiori alla soglia.\\
+Ogni maschera rilevata da Detectree2 viene trasformata in un poligono, grazie alla funzione \textit{findContours} di OpenCV, valutato poi quale è il più ampio (l'albero potrebbe essere stato identificato con chiome di dimensione diversa) e controllato che sia veramente un poligono con almeno tre punti per evitare di considerare erroneamente corone anche i punti o le rette, ne vengono estratte le coordinate grazie a Shapely, che lo rappresenta con la sua struttura di tipo \textit{Polygon}. Shapely è una libreria Python che permette la manipolazione e l'analisi di oggetti geometrici, come punti, linee e poligoni \cite{shapely2025}.\\
+Sul poligono viene anche applicato un ulteriore metodo, \textit{simplify(0.3, preserve\_topology=True)} che è fondamentale per ridurre il numero dei vertici del poligono, mantenendo però la forma dello stesso. Questo va a ridurre il peso dell'output, che potrebbe essere veramente significativo nel caso in cui non ci fosse nessun filtro sui vertici.\\
+Una volta isolata la corona, si procede con l'ultima fase che consiste nel parsing delle coordinate esterne del poligono \textit{crownGeometry}. In questo passaggio viene rimosso l'ultimo punto, che coincide con il primo per garantire la chiusura del poligono (\textit{coords\_without\_last}), e viene generata una lista di coordinate rappresentate come coppie di valori decimali. La funzione restituisce così le corone identificate con i corrispondenti score.
+
+\section{Confronto con DetecTree}
+DetecTree e Detectree2 sono due soluzioni ideate per isolare, nelle immagini satellitari urbane e non, aree boschive o anche singoli alberi piantumati in parchi cittadini. Pur condividendo il nome e il target di oggetti (alberi) ai quali questi modelli sono dedicati, non utilizzano la stessa tipologia di rete ne lo stesso stack tecnologico.\\
+L'obiettivo di questa ricerca è quello di identificare gli alberi, in entrambi i casi è possibile farlo, ma soltanto nel caso di Detectree2 possono essere isolati singolarmente, senza confonderli con altre aree verdi, come riesce ad esempio a fare YOLO.\\
+In maniera molto schematica e tabellare è possibile confrontare i due modelli, tenendo conto delle definizioni e dei dettagli tecnici discussi finora:\\\\
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{5cm}|p{5cm}|}
+\hline
+\textbf{Feature} & \textbf{DetecTree} & \textbf{Detectree2} \\
+\hline
+segmentazione & semantica, distingue tra i pixel albero e non albero & oggettiva, individua le corone degli alberi\\
+modello & classificatore tradizionale (AdaBoost) & Deep Learning (R-CNN)\\
+inputs & RGB & RGB + immagini multispettro\\
+outputs	& mappa di copertura arborea, percentuale di copertura rispetto all'immagine & poligoni delle corone degli alberi, classi multiple\\
+utilizzo & analisi copertura arborea, pianificazione urbana & studio individuale degli alberi\\
+\hline
+\end{tabular}
+\caption{Confronto tra DetecTree e Detectree2}
+\end{table}
+

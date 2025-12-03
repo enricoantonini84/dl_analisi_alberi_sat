@@ -1,0 +1,285 @@
+\chapter{SegFormer}
+L'avvento delle moderne LLM ha introdotto numerose innovazioni nel campo del machine learning: sebbene progettate principalmente per il linguaggio naturale, hanno portato caratteristiche applicabili anche alla computer vision, come nel caso dei transformer.\\ 
+Questi costituiscono la base di un algoritmo di deep learning chiamato SegFormer, portmanteau di "segmentation" e "transformer", che utilizza i transformer per classificare i pixel degli oggetti all'interno delle immagini tramite quella che, come illustrato nel secondo capitolo, viene definita architettura vision transformer (ViT) \cite{xie2021segformersimpleefficientdesign}.
+
+\section{Principio di funzionamento}
+SegFormer è un algoritmo che utilizza i transformer per isolare gli oggetti, ma non si limita soltanto a quello: effettua una vera e propria segmentazione semantica, ovvero assegna una classe a ciascun pixel dell' immagine, in questo caso "tree" e "background".\\ 
+Il transformer implementato in questo specifico algoritmo è una variante del ViT classico, che prende il nome di MixTransformer (MiT). In aggiunta al MiT è anche presente un decoder, chiamato Multi-layer Perceptron (MLP) che è fondamentale per la segmentazione semantica delle immagini.\\
+Il funzionamento può essere così riassunto:
+
+\begin{itemize}
+    \item MixTransformer è il backbone di SegFormer, ovvero la parte di rete neurale che estrae tutte le feature dai dati in input, ovvero le immagini. Il MiT, che in pratica è l'encoder della rete, implementa una struttura gerarchica che divide l'immagine in parti (patch) e poi le elabora con blocchi transformer.
+    \item Ogni stage del MiT produce delle feature map che hanno risoluzione e profondità diverse, come visto in precedenza per DetecTron2, mantenendo una struttura spaziale che ha complessità ridotta rispetto al ViT che invece lavora direttamente sull'intera immagine.
+    \item Il decoder di SegFormer è un MLP, che aggrega le feature multi-scale ottenute dal MiT durante la fase di encoding, fornendo una rappresentazione completa pixel per pixel. Vengono così combinate sia il contesto globale (disposizione degli oggetti nell'immagine, chi sta "davanti", chi sta "dietro" in secondo piano) che le informazioni locali (bordi degli oggetti).
+    \item L'aggregazione avviene senza convoluzioni, dato che il decoder impara a pesare e combinare le informazioni ricevute dal backbone, rendendo le predizioni più robuste e precise.
+\end{itemize}
+
+Appreso il funzionamento di SegFormer sarebbe facile paragonare questo tipo di algoritmo alle CNN o R-CNN, già incontrate nei capitoli precedenti, in fin dei conti processano immagini e le trasformano in numeri, come ad esempio tensors o matrici. La vera differenza è come vengono elaborate le informazioni spaziali e contestuali dell'immagine: le CNN usano filtri convoluzionali ed estraggono caratteristiche e oggetti da immagini, analizzando piccole porzioni della stessa e seguendo una gerarchia spaziale, mentre i ViT suddividono l'immagine in patch e le trattano come se fossero token indipendenti, simili al modo in cui le LLM per il linguaggio naturale trattano le parole. In sostanza le CNN sono più efficaci ad estrarre oggetti locali evidenziandoli, come può essere ad esempio la singola corona di un albero, mentre i trasformer sono più efficaci a cogliere il contesto complessivo, utilizzando meccanismi per modellare le relazioni globali tra tutte le patch.\\
+Proprio per questo motivo SegFormer non è in grado di distinguere un singolo albero da un altro, isolandone la corona, ma sa riconoscere dove sono gli alberi in maniera estremamente efficace \cite{visionplatform2025vit}.
+
+\section{Tipologia di modello utilizzato}
+In rete è possibile scaricare diversi modelli di SegFormer, con varianti più o meno sviluppate di encoder e decoder, adatti ad isolare oggetti di vario genere all'interno delle immagini. Alcuni sono anche linkati e disponibili dalla repo ufficiale su NVlabs, il progetto di ricerca di Nvidia sull'intelligenza artificiale \cite{nvlabs_segformer}.\\
+I modelli reperibili e addestrabili sono in formato pt, quindi possono essere caricati con PyTorch come già visto nei capitoli precedenti.
+
+\subsection{Versione del modello}
+All'inizio del capitolo abbiamo visto che SegFormer è formato da encoder e decoder. Non esiste soltanto però una tipologia di encoder MiT, ma sono disponibili diverse versioni e revisioni che nel tempo sono state rilasciate per aumentare la precisione e la scalabilità del modello, in questo caso il modello di partenza è di Nvidia e prende il nome di \textit{mit-b3}.\\
+Il MiT viene rilasciato infatti in diversi tagli, da b0 a b5, dove b3 indica una capacità intermedia: all'aumentare della versione di b, aumentano anche i parametri, la profondità e la capacità rappresentativa.\\
+È doveroso anche precisare che il termine "modello di partenza" è importante, poichè esso non viene usato as-is, che potrebbe anche funzionare se ci trovassimo nel caso in cui la necessità fosse quella di individuare varie tipologie di oggetti, ma viene utilizzato per creare un nuovo modello dopo averlo addestrato con un dataset dedicato in quanto, come in precedenza visto per YOLO, è necessario effettuare un training specifico su un dataset urbano per far si che le uniche due classi da riconoscere siano background e tree.
+
+\section{Preparazione del dataset}
+Data la relativamente recente implementazione di SegFormer, non è semplice acquisire dataset ben formati per il training del modello, soprattutto se sono specifici come possono essere richiesti da questa ricerca. In particolare, visti i requisiti legati agli alberi fotografati da satellite in tessuto urbano, l'idea è stata quella di utilizzare il dataset YOLO, che risponde a tutte le caratteristiche necessarie, convertendolo per addestrare un modello SegFormer.\\
+Il concetto è quello di utilizzare le tiles originali, con l'unica differenza di sostituire i files contenenti le coordinate dei bounding boxes con delle maschere, in modo da far risultare il dataset compatibile con SegFormer. Per ogni immagine del dataset viene quindi generata una corrispondente maschera binaria, dove l'area coperta dalle annotazioni YOLO viene evidenziata.\\\\
+L'area della maschera è appunto bianca, ma lo è soltanto per mettere in evidenza a scopo didattico qual è l'area che viene considerata come "coperta" da alberi. In realtà, in questo caso specifico, il colore dei riquadri sarebbe quasi impercettibile: SegFormer può essere addestrato per riconoscere più oggetti contemporaneamente, ad ogni classe di oggetto deve essere assegnato un colore, il nero è comunemente considerato come colore di sfondo, mentre nel caso degli alberi è assegnato un colore molto vicino al nero, quasi impercettibile ad occhio nudo, che rappresenta la prima classe. Questi colori non sono vere e proprie tinte RGB, ma valori numerici (interi) in una immagine in scala di grigi o in formato indicizzato, che SegFormer interpreta come etichette delle classi.
+
+\subsection{Convertitore del dataset YOLO}
+La conversione del dataset può essere effettuata con un semplice script Python, che si occupa di creare le maschere partendo dal path del dataset YOLO, a patto che sia correttamente organizzato nelle cartelle val, train e test con immagini e file che definiscono le bounding boxes, quindi che contengono le annotazioni. 
+
+\begin{lstlisting}
+import os
+from PIL import Image
+import numpy as np
+
+def create_segmentation_mask(boxes, img_width, img_height, num_classes=1):
+    mask = np.zeros((img_height, img_width), dtype=np.uint8)
+    
+    for i, (class_id, x1, y1, x2, y2) in enumerate(boxes):
+        
+        orig_coords = (x1, y1, x2, y2)
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(img_width, x2)
+        y2 = min(img_height, y2)
+        
+        if x2 <= x1 or y2 <= y1:
+            continue
+            
+        mask_value = int(class_id) + 1
+        if mask_value > num_classes:
+            mask_value = 1
+        
+        mask[y1:y2, x1:x2] = mask_value
+        actual_value = mask[y1, x1] if y1 < img_height and x1 < img_width else -1
+    
+    return mask
+
+\end{lstlisting}
+
+\noindent
+Alla funzione vengono passati diversi parametri:
+
+\begin{itemize}
+    \item \textit{boxes}: è la lista dei bounding boxes definiti per l'immagine, nel formato [\textit{class\_id}, \textit{angolo\_alto\_sx\_x1}, \textit{angolo\_alto\_sx\_y1}, \textit{angolo\_basso\_dx\_x2}, \textit{angolo\_basso\_dx\_y2}]
+    \item \textit{img\_width}: larghezza dell'immagine in input.
+    \item \textit{img\_height}: altezza dell'immagine in input.
+    \item \textit{num\_classes}: numero di classi, valore intero che deve essere settato a 1 nel caso in cui la classe sia unica, come in questo.
+\end{itemize}
+
+Utilizzando Pillow \cite{clark2015pillow}, libreria per la manipolazioni delle immagini, viene inizializzata un'immagine vuota della risoluzione pari a quella dell'immagine di origine. Successivamente per ogni bounding box si crea, a partire dalle coordinate di origine in alto a sinistra e in basso a destra, la relativa maschera controllando però se è formata da un quadrato valido o le coordinate sono errate .\\
+Successivamente viene riempita l'area della bounding box, tenendo conto della relative classe dichiarata nella annotazione di YOLO. In questo caso specifico il \textit{class\_id} potrà essere soltanto 1, in quanto esiste solo un tipo di oggetto annotato che corrisponde all'albero, mentre lo zero è utilizzato per il background.\\
+Infine la funzione ritorna la maschera di segmentazione sotto forma di array NumPy, che rappresenta l’immagine della maschera. Dalla maschera in formato NumPy è poi possibile salvarla in un immagine rgb grazie a OpenCV \textit{cv2.imwrite(str(outputPath), mask)}.
+
+\section{Script di training}
+Come per YOLO, per ridurre i considerevoli tempi di addestramento dei modelli SegFormer, l'idea è stata quella di ricorrere alla tecnica del transfer learning, soprattutto per mit-b4 e mit-b5.\\
+In questo caso è obbligatorio dotarsi di una GPU con supporto a CUDA, qualsiasi altra soluzione che non ne preveda l'uso potrebbe rivelarsi veramente poco efficiente.
+
+\subsection{Init}
+\begin{lstlisting}
+import os
+import numpy as np
+import argparse
+from PIL import Image
+from transformers import (
+    SegformerForSemanticSegmentation,
+    SegformerImageProcessor,
+    pipeline
+)
+
+image_processor = SegformerImageProcessor.from_pretrained("nvidia/mit-b3")
+\end{lstlisting}
+
+\noindent
+Oltre ai già noti OpenCV, NumPy e Torch, queste funzioni si basano sull'utilizzo delle librerie di Hugging Face.
+\textit{SegformerForSemanticSegmentation} e \textit{SegformerImageProcessor} sono parte della libreria Hugging Face transformer, permettono di addestrare e di utilizzare il modello SegFormer. Hugging Face è una piattaforma molto nota nella community open source sull'intelligenza artificiale, soprattutto per la sua libreria transformer e il suo Model Hub, dove gli sviluppatori possono condividere modelli preaddestrati \cite{wolf-etal-2020-transformers}.\\
+Infine è dichiarato come \textit{image\_processor} il pre-processore di Hugging Face ottimizzato per il modello SegFormer da usare, ovvero il già citato \textit{nvidia/mit-b3}. Il processore effettua sulle immagini in input una serie di operazioni, come ad esempio:
+\begin{itemize}
+    \item trasformazione dell'immagine dal formato originale, in questo caso NumPy, a quello Tensor compatibile con PyTorch.
+    \item normalizzazione effettuata sui canali RGB dell'immagine in input per essere uniforme al formato utilizzato nel modello preaddestrato.
+\end{itemize}
+
+\subsection{Parametri}
+\begin{lstlisting}
+model = SegformerForSemanticSegmentation.from_pretrained(
+            "nvidia/mit-b3",
+            num_labels=self.numClasses,
+            ignore_mismatched_sizes=True
+        )
+
+training_args = TrainingArguments(
+    output_dir="./results",
+    num_train_epochs=40,
+    per_device_train_batch_size=2,
+    eval_strategy="epoch",
+    remove_unused_columns=False,
+)
+\end{lstlisting}
+
+\noindent
+
+
+\noindent
+L'array \textit{treeClasses} contiene le classi per la segmentazione arborea, in questo caso solamente background e albero, con i relativi id numerici e i colori da associare a ciascuna classe per produrre la visualizzazione delle maschere in overlay (se implementato).\\
+Sono poi presenti, un po come già visto per il training del modello YOLO, i parametri di training:
+\begin{itemize}
+    \item \textit{model}: È il modello, in questo caso pre-trained, per la segmentazione semantica caricato con la funzione dedicata della libreria di Hugging Face.
+    \item \textit{num\_train\_epochs}: Numero di epochs di training.
+    \item \textit{per\_device\_train\_batch\_size}: Numero di immagini (o campioni) processati in contemporanea.
+    \item \textit{eval\_strategy}: Parametro che indica quando effettuare la fase di validation. Se specificato "epoch", viene effettuata al termine di ogni epoch.
+    \item \textit{output\_dir}: Percorso di output dove vengono salvati i modelli PyTorch addestrati, al termine di ogni epoch.
+\end{itemize}
+
+
+\subsection{Funzione di training}
+\begin{lstlisting}
+def trainModel():
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=trainingSet
+    )
+
+    train_result = trainer.train()
+    trainer.save_model()
+\end{lstlisting}
+
+\noindent
+Questa funzione è responsabile del training vero e proprio del modello, che avviene grazie alle librerie di Hugging Face.\\
+Per prima cosa inizializza il \textit{Trainer}, una classe di alto livello che gestisce il training del modello, inclusi:
+
+\begin{itemize}
+    \item Forward e backward pass del modello.
+    \item Calcolo del loss e ottimizzazione della loss function.
+    \item Valutazione periodica delle metriche.
+    \item Salvataggio dei checkpoint al termine di ogni epoch e alla fine del training.
+    \item Logging e monitoraggio in console delle info sull'addestramento.
+\end{itemize}
+
+\noindent
+Il forward pass è il processo di propagazione dell'input attraverso la rete, per arrivare all'output di uscita, in questo caso specifico è la predizione di copertura arborea.\\
+Il backward pass è successivo alla prediction, si calcola la funzione di loss che misura l'errore fra predizione e valore reale mappato nella maschera. Così facendo vengono aggiornati i pesi a ritroso, tramite un ottimizzatore.\\\\
+Con \textit{trainer.train()} viene lanciato il training, i risultati vengono poi copiati in \textit{train\_result} e successivamente \textit{trainer.save\_model()} salva il modello nel path specificato per l'output. Questo modello può essere poi utilizzato successivamente per l'inferenza.
+
+\subsection{Output della procedura di training}
+\begin{lstlisting}
+epoch Training Loss	Validation Loss	Mean Iou Mean Accuracy Overall Accuracy	Per Category Iou Per Category Accuracy
+1 0.988000 0.408625	0.712276 0.807701 0.914090	[0.9053025529456493, 0.5192490975926009] [0.955735232841766, 0.6596663623426008]
+\end{lstlisting}
+
+\noindent
+La procedura produce, come per l'addestramento di YOLO una serie di valori per ogni epoch, che indicano l'andamento del training del modello.\\
+\textit{Training Loss} e \textit{Validation Loss} misurano la qualità di ottimizzazione del modello. Bassi valori di loss indicano che l'apprendimento in fase di training e la validazione sono buoni.\\
+\textit{Mean Iou} è la media delle IoU (Intersections over Union) calcolate per ogni classe. Come visto per YOLO, indica il rapporto dell'area di sovrapposizione fra quella inferita dalla predizione del modello e il ground truth. Il risultato è migliore con un valore alto.\\
+\textit{Mean Accuracy} media dell'accuracy per ciascuna classe, mentre \textit{Overall Accuracy} accuratezza globale su tutti i pixel dell'immagine.\\
+\textit{Per Category Iou} e \textit{Per Category Accuracy} mostrano un array con i valori per ogni classe di IoU e Accuracy. In questo caso vengono mostrate due classi, "background" e "tree".
+
+\section{Inferenza}
+Una volta addestrato il modello è possibile procedere all'inferenza sulle immagini satellitari. La procedura di inferenza è anch'essa realizzata grazie alle librerie di Hugging Face, che in questo caso facilitano l'operazione di predizione, ma non sono strettamente necessarie: il modello prodotto in ogni caso ha un formato che può essere caricato da PyTorch, quindi per utilizzarlo è anche possibile procedere con l'implementazione direttamente pubblicata da Nvidia, oppure con altre librerie di terze parti.\\
+In questo caso, per coerenze e praticità, è mostrato il codice che sfrutta le librerie Hugging Face.
+
+\subsection{Funzione di analisi predittiva}
+\begin{lstlisting}
+def imagePrediction(image_path: str, model_path: str, confidence: float):
+    image = Image.open(image_path).convert("RGB")
+    processor = SegformerImageProcessor.from_pretrained("nvidia/mit-b3")
+    model = SegformerForSemanticSegmentation.from_pretrained(model_path)
+    
+    inputs = processor(image, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model(**inputs)
+        
+    logits = outputs.logits
+        
+    probabilities = torch.nn.functional.softmax(logits, dim=1)
+        
+    tree_prob = probabilities[0, 1].cpu().numpy()
+    mask = (tree_prob > confidence).astype(np.uint8)
+\end{lstlisting}
+
+\noindent
+La funzione di predizione accetta in input due parametri, \textit{image\_path} e \textit{model\_path}, rispettivamente percorso dell'immagine e del modello addestraato. Inoltre è anche richiesto di specificare la soglia di confidenza che, come per gli altri modelli visti finora, è il limite entro il quale un oggetto rilevato viene considerato buono o meno.\\
+Successivamente è necessario, come in precedenza per il dataset, preprocessare le immagini grazie al \textit{SegformerImageProcessor}, dove anche in questo caso va specificato il "modello di origine" che stabilisce il formato dei dati. Grazie a questo preprocessing si ha un grande vantaggio perchè è possibile fornire in input immagini anche di risoluzione diverse, dato che sarà poi il processor a standardizzarle.\\
+Il vero e proprio caricamento del modello addestrato avviene a riga quattro, e alla riga successiva viene poi effettvamente processata l'immagine.\\
+L'inferenza è lanciata sull'immagine grazie alla chiamata che la libreria espone, direttamente nella classe che gestisce il modello \textit{model(**inputs)} e fornisce in output alcune informazioni importanti:
+
+\begin{itemize}
+    \item \textit{.logits}: scores grezzi della prediction.
+    \item \textit{.loss}: valore della loss function.
+    \item \textit{.attentions}: attention weights, ovvero i valori numerici che vengono assegnati ai soggetti "osservati" dal modello, ad esempio per un albero potrebb essere 0.8 per le foglie, 0.6 per il tronco. Più è vicino a 1, più è importante il valore.
+\end{itemize}
+
+\noindent
+In questo specifico caso per definire la maschera che isola gli alberi sono sufficienti gli scores, che vengono passati ad una funzione di PyTorch detta di attivazione. Questa particolare funzione, la Softmax, prende i dati grezzi degli scores che assegano un punteggio al pixel, come gli attention weights e viene convertito in una probabilità, ovvero più punteggio viene totalizzato da un pixel, più ha probabilità di essere un albero.\\
+Le ultime due istruzioni sono quelle che estraggono la maschera binaria contenente il risultato di predizione "albero" o "non albero", estraendo le probabilità della classe "albero" con NumPy e scartando quelle che sono al di sotto di una determinata soglia di confidenza.
+
+\subsection{Qualità della prediction}
+Per poter visualizzare il risultato della predizione è possibile poi, con OpenCV andare a sovrapporre la maschera all'immagine originale. L'implementazione non è qui riportata ma è reperibile, con qualche variazione, sulla repo originale di SegFormer nei tools e nelle demo.\\
+È significativo vedere il risultato della predizione che viene effettuata da SegFormer, infatti la rappresentazione grafica mette in evidenza tutti i dati del modello quali la copertura arborea, con la relativa maschera binaria che va a delineare i contorni delle zone urbane piantumate e anche la probabilità, sotto forma di heatmap che rappresenta la distribuzione di probabilità del modello.\\
+È interessante notare che, a differenza di DetecTree, vengono evidenziate le aree coperte da alberi ma non per la semplice vicinanza di colore dei pixel come visto appunto con l'algoritmo AdaBoost: in questo caso nemmeno le ombre degli alberi stessi, che si stagliano sul fiume Adige, sono incluse nella maschera.\\
+Il risultato della predizione include la maschera binaria che delinea i contorni delle zone piantumate e una heatmap che rappresenta la distribuzione di probabilità del modello, permettendo di visualizzare con precisione le aree identificate come copertura arborea.
+
+\section{Applicazione di watershed}
+SegFormer è molto efficace nell'isolare gruppi di alberi all'interno di un'immagine, senza però essere in grado di distinguerli in maniera puntuale. A tal proposito è possibile utilizzare uno tecnica di post-processing chiamata watershed, a valle quindi della detection di SegFormer \cite{kornilov2018watershed}.\\
+Questa è una tecnica basata sulla morfologia matematica, che analizza l'immagine separando oggetti adiacenti in maniera del tutto agnostica riguardo il loro contenuto: non è in grado di distinguere cosa è albero e cosa non lo è ma, partendo dalle zone isolate grazie a SegFormer, l'unico tipo di oggetti isolabili saranno implicitamente alberi, consentendo così di individuare le chiome ed il numero di alberi presenti.\\
+Riassumendo il funzionamento in breve:
+\begin{itemize}
+    \item L'algoritmo prende un'immagine in scala di grigi in input.
+    \item L'immagine viene interpretata come una superficie, dove i pixel rappresentano altitudini.
+    \item Si selezionano pixel o regioni di partenza chiamati marker, che possono identificare le etichette dei punti più bassi, i minimi locali, oppure quelli più alti come i massimi locali. Nel nostro caso saranno i massimi, ovvero le punte degli alberi, ad essere individuate.
+    \item L'immagine viene segmentata tramite un procedimento di flooding, da qui il termine watershed (riempimento di bacini), dove le regioni vengono "riempite" a partire dai marker.
+    \item In ogni step i pixel confinanti con le regioni flooded vengono ordinati in base al valore del gradiente, inserendoli in una coda prioritaria: il pixel di minore (o maggiore nel caso dei massimi) valore viene assegnato al bacino del marker più vicino.
+    \item I confini tra i bacini costituiscono la linea di watershed, ovvero il bordo fra i diversi elementi dell'immagine.
+\end{itemize}
+
+\subsection{Funzione di segmentazione}
+Qui viene riportata una funzione che si occupa di trovare le regioni e gli elementi grazie al processo di watershed, partendo da una maschera fornita in input come parametro.\\
+Per rendere l'operazione più efficiente, è possibile sfruttare due librerie molto note in ambito Python, come Scikit e SciPy: la prima viene usata per l'elaborazione delle immagini ed è già stata introdotta nel capitolo su Detectree, mentre la seconda è una libreria open-source che offre numerosi strumenti di elaborazione dati, tra cui algoritmi di ottimizzazione, interpolazione ed elaborazione di segnali \cite{2020SciPy-NMeth}.\\
+
+\begin{lstlisting}
+from scipy.ndimage import distance_transform_edt, label
+from skimage.feature import peak_local_max
+from skimage.morphology import watershed
+from skimage.measure import regionprops
+import numpy as np
+    
+def watershedSegmentation(mask, minDistance, offsetX=0, offsetY=0):
+    distanceMap = distance_transform_edt(mask)
+    
+    peakCoords = peak_local_max(
+        distanceMap, 
+        min_distance=minDistance, 
+        labels=mask, 
+        footprint=np.ones((3, 3))
+    )
+    
+    markers = np.zeros_like(mask, dtype=np.int32)
+    for i, (y, x) in enumerate(peakCoords, start=1):
+        markers[y, x] = i
+    
+    labelsWatershed = watershed(-distanceMap, markersLabeled, mask=mask)
+    
+    treeCrowns = []
+    for treeId in range(1, labels.max() + 1):
+        crownMask = (labels == treeId)
+        treeCrowns.append(crownMask)
+    
+    return treeCrowns
+
+\end{lstlisting}
+
+\noindent
+La funzione \textit{distance\_transform\_edt} di SciPy viene utilizzata per creare la mappa delle distanze, che viene successivamente fornita in input alla funzione \textit{peak\_local\_max}, appartenente alla libreria scikit-image, per individuare i marker.\\
+Successivamente vengono trasformate le coordinate dei picchi in una mappa di marker numerici, dove ogni marker ha un'etichetta univoca assegnata alla crescita dei bacini watershed.\\
+Poi viene invocata \textit{watershed}, funzione di scikit-image, che "allaga" progressivamente l'immagine partendo dai marker, per poi fermarsi solamente quando le linee di delimitazione si incontrano, rilevando così i confini degli oggetti.\\ 
+Infine, vengono isolate le maschere degli oggetti rilevati e memorizzate nell'array \textit{treeCrowns}, che possono essere utilizzate per il calcolo di area, perimetro o per la visualizzazione in overlay sugli oggetti delimitati.
+
+\subsection{Risultato della segmentazione}
+Il processo di segmentazione watershed produce tre output progressivi: partendo dall'immagine satellitare sorgente, viene prima generata la maschera di SegFormer che evidenzia in verde le aree arboree rilevate, e successivamente viene applicata la segmentazione watershed che distingue le singole corone degli alberi, identificandole con colori differenti. Questo permette di contare e localizzare ogni singolo albero all'interno delle aree precedentemente identificate come piantumate.

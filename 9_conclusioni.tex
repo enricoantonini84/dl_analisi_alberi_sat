@@ -1,0 +1,255 @@
+\chapter{Analisi dei risultati}
+Nei precedenti capitoli sono stati trattati diversi algoritmi che permettono, a partire da immagini satellitari, di ricavare la posizione degli alberi sia come coordinate in pixel che geografiche, esportando infine un GeoJSON che ne definisce in maniera più o meno precisa la forma della corona o la bounding box che delimita l'albero stesso. Altri algoritmi, come SegFormer e DetecTree, sono invece in grado di isolare gruppi di alberi.\\
+Queste due modalità sono interessanti in quanto applicabili per il calcolo dell'indicatore trattato nel capitolo 7, dove è considerata sia la distanza da singoni alberi che quella da parchi o aree verdi piantumate.\\
+Per verificare però quale dei modelli ha ottenuto i risultati migliori, è necessario prima di tutto individuare la reale posizione geografica degli alberi presenti sul tessuto urbano.
+
+\section{Dataset di ground truth}
+Per procedere con la verifica è fondamentale poter accedere ad un dataset contenente la posizione in latitudine e longitudine degli alberi piantumati, in altre parole il nostro ground truth, ovvero i dati di riferimento verificati. In caso contrario è impossibile poter confrontare l'accuratezza dei vari modelli visti in precedenza, che si basano solo sulla detection visiva.
+
+\subsection{Accesso a database pubblici}
+In alcuni casi la regione, il comune o enti terzi forniscono API o dataset che mappano gli alberi e/o le piantumazioni. Qualora questo tipo di informazioni siano facilmente accessibili, il processo di costruzione del database di ground truth si semplifica notevolmente, poiché già disponibili come dati validati e puliti, ovvero filtrati da possibili falsi positivi o falsi negativi.\\
+È necessario però considerare che gli alberi mappati in questi dataset, potrebbero contenere solo le aree e gli alberi che costituiscono la vegetazione su suolo pubblico, non considerando quindi proprietà private piantumate che vengono rilevate invece dalle sole immagini satellitari.\\
+Il formato dei dati varia da ente pubblico, regione o comune: in alcuni casi vengono fornite le semplici coordinate in JSON/CSV, in altri in GeoJSON pronti ad essere importati in applicativi GIS, in altri ancora sono sotto forma di pacchetto CHM. Quest'ultimo è un particolare formato che viene generato da sensori LIDAR (Light Detection and Ranging) posti su velivoli che generano, grazie alla tecnologia di impulsi laser, una rappresentazione in 3D del territorio e delle corone degli alberi.
+
+\subsection{Annotazione manuale}
+Un'altra alternativa è quella di creare un dataset manualmente, con applicativi come QGIS, importando l'immagine satellitare di riferimento e annotando le coordinate in maniera punta e clicca su un layer, successivamente esportabile in GeoJSON.\\
+Questa soluzione rende possibile l'annotazione di tutti gli alberi, su suolo pubblico e non, ma è estremamente oneroso in termini di tempo. È inoltre fondamentale verificare che l'immagine satellitare utilizzata nel software (ad esempio un file GeoTIFF) sia correttamente georeferenziata, poiché una georeferenziazione errata comporterebbe un'annotazione imprecisa delle coordinate geografiche di ciascun albero rilevato.
+
+\section{Benchmark dei modelli}
+Una volta definito il ground truth, è possibile procedere al confronto con le predizioni generate dai modelli: in base alla fonte dei dati è necessario stabilire i parametri di confronto sui quali calcolare le metriche di qualità del rilevamento.\\
+Per questa analisi è stato utilizzato un GeoJSON messo a disposizione dal comune di Milano \cite{ComuneMilanoAlberiGeolocalizzazione2024}, che mappa tutti gli alberi piantumati sul suolo pubblico all'interno dei confini comunali. Per ragioni di costi e di complessità computazionale, la detection è stata effettuata sulla mappa satellitare che misura 3km di raggio a partire dal centro di milano. I dati sono liberamente disponibili con licenza Creative Commons\\
+
+\subsection{Requisiti}
+Come anticipato precedentemente, questo GeoJSON proveniente da fonte istituzionale include esclusivamente gli alberi su aree pubbliche, escludendo quelli su suolo privato. Non è quindi possibile determinare con precisione i falsi positivi effettivi, poiché numerosi alberi assenti dal dataset comunale potrebbero essere stati rilevati correttamente dai modelli precedentemente analizzati, creando così una sovrastima degli errori di rilevamento.\\
+Inoltre, i dati forniti dal comune mappano gli alberi come singoli punti georeferenziati anziché come poligoni quindi, per rendere possibile questa comparazione, un albero viene considerato correttamente rilevato quando il punto georeferenziato ricade all'interno di una bounding box YOLO o di un poligono di segmentazione (che rappresenta la chioma per DetecTree2 o l'area piantumata per SegFormer). Gli alberi i cui punti non ricadono in nessun poligono vengono classificati come non rilevati.\\
+Per confrontare correttamente i modelli, è tuttavia necessario distinguere tra quelli che identificano singoli alberi (come YOLO e DetecTree2) e quelli che identificano aree più ampie, come le aree piantumatie o le zone verdi (SegFormer). Questa distinzione è fondamentale poiché i diversi approcci di rilevamento richiedono metodologie di valutazione differenti.
+
+\subsection{Parametri dei modelli}
+I risultati sono basati su detection effettuate con i seguenti parametri di confidence:
+\begin{itemize}
+    \item YOLO11: 0.416, che come definito dalla curva F1 dopo il training è il valore che bilancia perfettamente precision e recall. Per compensare la precisione della detection, viene applicato un buffer di prossimità di 11m attorno alle bounding box.
+    \item Detectree2: 0.25, definito per una detection che favorisce valori di recall più alti ma riduce mancate detection.
+    \item SegFormer: 0.30, offre il miglior bilanciamento fra precision e recall, individuato dopo un certo numero di test (SegFormer non ha un valore di F1 globale, lavora a livello di pixel con probabilità per classe).
+    \item DetecTree: non ha parametrizzazione della confidenza, effettua anch'esso una classificazione dei pixel, ma in maniera diversa da SegFormer.
+\end{itemize}
+
+\subsection{Script di rilevamento}
+La funzione di confronto tra il file GeoJSON del comune di Milano, utilizzato come ground truth, e i poligoni predetti dai modelli è relativamente semplice e lineare:
+
+\begin{lstlisting}
+import geopandas as gpd
+
+def calculateTreeCoverage(groundTruthPath: str, modelTreesDetectedPath: str):
+    trees = gpd.read_file(groundTruthPath)
+    detections = gpd.read_file(modelTreesDetectedPath)
+    detectedTrees = set()
+    
+    for _, polygon in detections.iterrows():
+        treesInside = trees[polygon.geometry.contains(trees.geometry)]
+        detectedTrees.update(treesInside.index)
+    
+    coveragePercentage = (len(detectedTrees) / len(trees)) * 100
+\end{lstlisting}
+
+\noindent
+Nelle prime due righe vengono caricati i files in due dataframe GeoPandas, una libreria Python che permette di elaborare dati in tabelle e csv, con il supporto per la gestione e l’analisi di dati geospaziali \cite{kelsey_jordahl_2020_3946761}.\\
+Dopo aver inizializzato un set per contenere gli effettivi alberi rilevati, si passa all'incrocio dei dati: per ciascun poligono rilevato dal modello di machine learning, viene usata l'operazione geometrica \textit{contains()}, che isola tutti gli alberi di ground truth contenuti all'interno del poligono di rilevazione. Gli indici di questi alberi vengono aggiunti poi al set \textit{detectTrees}.\\
+A questo punto la percentuale di rilevamento non è altro che il rapporto tra alberi unici rilevati e il totale di alberi nel ground truth.
+
+\section{Rilevamento aree arboree}
+In questo caso sono due gli algoritmi che restituiscono aree popolate da alberi, anzichè singole corone: per completezza è stato incluso DetecTree.
+
+\subsection{SegFormer}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Metrica} & \textbf{Valore} \\
+\hline
+Alberi rilevati & 25.029\\
+Alberi non rilevati& 19.365\\
+Poligoni con alberi & 4.076\\
+Poligoni senza alberi & 9.202\\
+\hline
+\textbf{Percentuale alberi rilevati} & \textbf{56,38\%}\\
+\hline
+\end{tabular}
+\caption{Risultati rilevamento SegFormer}
+\end{table}
+
+\noindent
+SegFormer si conferma molto efficace a rilevare alberi in contesti urbani e, considerando che il dataset di partenza è lo stesso usato per il training del modello YOLO11, è significativamente più preciso se consideriamo l'area di copertura anzichè i singoli alberi, dimostrando una buona selettività nel rilevare aree effettivamente piantumate.
+
+\subsection{DetecTree}
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Metrica} & \textbf{Valore} \\
+\hline
+Alberi rilevati & 17.563\\
+Alberi non rilevati& 27.294\\
+Poligoni con alberi & 8.006\\
+Poligoni senza alberi & 436.865\\
+\hline
+\textbf{Percentuale alberi rilevati} & \textbf{39,2\%}\\
+\hline
+\end{tabular}
+\caption{Risultati rilevamento DetecTree}
+\end{table}
+
+\noindent
+DetecTree si conferma in grado di poter rilevare la maggioranza degli alberi ma, come introdotto nel capitolo dedicato, per la sola copertura arborea è estremamente poco preciso perché mescola alle corone anche le aree verdi. A dimostrazione di questo vi è proprio il fatto che sono stati identificati dall'algoritmo aree verdi suddivise in più di 400 mila poligoni, di queste solo l'1,8\% contengono alberi: sicuramente alcuni poligoni conterranno piantumazioni in aree private, ma la maggioranza conterrà generico "verde urbano".
+
+\section{Rilevamento singoli alberi}
+Vediamo ora i risultati sui dati inferiti dai due modelli di object detection, che sfruttano reti convoluzionali: come anticipato in precedenza essi lavorano sulle feature/caratteristiche dell'immagine, per poterne isolare gli oggetti in esse contenuti.
+
+\subsection{YOLO11}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Metrica} & \textbf{Valore} \\
+\hline
+Alberi rilevati & 22.956\\
+Alberi non rilevati& 21.438\\
+Poligoni con alberi & 10.817\\
+Poligoni senza alberi & 11.861\\
+Media alberi per poligono & 2,62\\
+\hline
+\textbf{Percentuale alberi rilevati} & \textbf{51,71\%}\\
+\hline
+\end{tabular}
+\caption{Risultati rilevamento YOLO11}
+\end{table}
+
+\noindent
+In questo caso i poligoni sono ricavati dalle bounding boxes che, essendo progettate per mettere in evidenza l'oggetto rilevato, non costituiscono la vera e propria corona dell'albero.\\
+Considerando solamente gli alberi presenti nel GeoJSON di Milano, abbiamo una media di 2,62 alberi per detection: ovvero il 24,2\% delle bounding box contiene un singolo albero, mentre il 71,0\% contiene piccoli gruppi da 2 a 5 alberi, dimostrando una buona precisione nel rilevamento di alberi individuali e piccoli gruppi.
+
+\subsection{DetecTree2}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Metrica} & \textbf{Valore} \\
+\hline
+Alberi rilevati & 10.355\\
+Alberi non rilevati& 34.039\\
+Poligoni con alberi & 5.216\\
+Poligoni senza alberi & 9.659\\
+Media alberi per poligono & 2.01\\
+\hline
+\textbf{Percentuale alberi rilevati} & \textbf{23,33\%}\\
+\hline
+\end{tabular}
+\caption{Risultati rilevamento DetecTree2}
+\end{table}
+
+\noindent
+DetecTree2 è un modello complicato da bilanciare, in quanto a valori bassi di confidence è si in grado di rilevare più alberi ma introduce un numero importante di falsi positivi. A questo valore di confidence, identificato come buono dopo vari test di inferenza su immagini satellitari, sembra essere nettamente meno efficace degli altri due: probabilmente il fatto di trovarsi in un contesto urbano non lo aiuta, infatti sembra essere molto più adatto per foreste o ecosistemi forestali \cite{Ball2022DetectTree2Documentation}.\\
+Considerando gli alberi che è riuscito a rilevare con successo, possiamo comunque notare una media di 2,01 alberi per poligono, quindi DetecTree2 mostra una buona capacità di segmentare singole corone: il 49,3\% dei poligoni contiene un singolo albero e il 47,1\% contiene piccoli gruppi da 2 a 5 alberi.
+
+\subsection{SegFormer + Watershed}
+Watershed è una tecnica di segmentazione delle immagini che permette di separare oggetti connessi. È stata applicata ai risultati di SegFormer per tentare di suddividere le aree arboree in alberi individuali.\\
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Metrica} & \textbf{Valore} \\
+\hline
+Alberi rilevati & 24.280\\
+Alberi non rilevati& 20.114\\
+Poligoni con alberi & 1.917\\
+Poligoni senza alberi & 1.845\\
+Media alberi per poligono & 13.87\\
+\hline
+\textbf{Percentuale alberi rilevati} & \textbf{54,69\%}\\
+\hline
+\end{tabular}
+\caption{Risultati rilevamento SegFormer + Watershed}
+\end{table}
+
+\noindent
+L'applicazione di watershed ai risultati di SegFormer peggiora leggermente le performance: la detection rate scende dal 56,38\% al 54,69\%. Questo suggerisce che tentare di suddividere ulteriormente le aree rilevate può introdurre alcuni errori.\\
+Con una media di 13,87 alberi per poligono, l'algoritmo SegFormer + Watershed rileva principalmente aree con gruppi di alberi: solo il 5,6\% dei poligoni contiene un singolo albero, mentre il 39,9\% contiene gruppi superiori a 10 alberi.
+
+\section{Confronto comparativo}
+I modelli analizzati mostrano caratteristiche distintive a seconda della loro architettura e approccio alla detection.
+
+\subsection{Rilevamento alberi singoli}
+Per il rilevamento di alberi individuali, i modelli con le migliori performance in termini di precisione sono:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Algoritmo} & \textbf{Copertura} & \textbf{Alberi per poligono}\\
+\hline
+YOLO11 & 51,71\% & 2,62\\
+DetecTree2 & 23,33\% & 2,01\\
+SegFormer+Watershed & 54,69\% & 13,87\\
+\hline
+\end{tabular}
+\caption{Confronto algoritmi per rilevamento alberi singoli}
+\end{table}
+
+\noindent
+YOLO11 e DetecTree2 si distinguono per la capacità di identificare alberi individuali (media ~2-3 alberi per detection), con DetecTree2 particolarmente preciso nella segmentazione di singole corone (49,3\% detection con un solo albero). YOLO11 con buffer di 11m raggiunge una detection rate di 51,71\% mantenendo una media di 2,62 alberi per detection, risultando molto efficace per rilevamento di alberi individuali. SegFormer+Watershed, pur avendo una detection rate leggermente superiore (54,69\%), identifica principalmente gruppi di alberi (media 13,87 alberi/detection), risultando meno adatto per applicazioni che richiedono conteggio preciso di alberi individuali.
+
+\subsection{Rilevamento aree arboree}
+Per identificare aree piantumate e gruppi di alberi, SegFormer base risulta il più efficace:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Algoritmo} & \textbf{Detection rate} \\
+\hline
+SegFormer & 56,38\%\\
+DetecTree & 39,2\% \\
+\hline
+\end{tabular}
+\caption{Confronto algoritmi per rilevamento aree arboree}
+\end{table}
+
+\noindent
+SegFormer offre la miglior detection rate (56,38\%) con la sua capacità di identificare in maniera precisa i gruppi di alberi, mentre DetecTree ha un tasso di falsi positivi eccessivo (98,19\%) che lo rende inadatto per applicazioni pratiche di solo rilevamento arboreo.
+
+\section{Analisi e miglioramenti}
+I risultati raggiunti dai vari modelli denotano una discreta capacità di rilevamento degli alberi: SegFormer, il modello più performante tra i tre, rileva poco meno del 57\% degli alberi piantumati sul territorio comunale. Si tratta di una percentuale significativa per questo specifico task, notoriamente complesso data la necessità di disporre di immagini satellitari di elevata qualità per ottenere buoni livelli di rilevamento. I fattori più comuni che possono compromettere i risultati sono legati alla qualità del dataset di training e al tipo di immagini in input utilizzate per l'inferenza.\\
+
+\subsection{Specie di alberi nel dataset di Lleida}
+Il dataset utilizzato per il training dei due modelli che hanno restituito i migliori riscontri in termini di copertura proviene da studi condotti nell'area urbana di Lleida, in Spagna, precedentemente introdotto nel capitolo dedicato a YOLO. La documentazione sulle specie arboree del territorio di Lleida \cite{paeria_lleida_especies_arbories} evidenzia la presenza di alcune specie tipiche dell'ambiente mediterraneo e fluviale, alcune delle quali potrebbero non essere completamente rappresentative dell'ecosistema urbano milanese.\\
+La differenza climatica e biogeografica tra Lleida e Milano potrebbe influenzare l'efficacia del modello addestrato su questo dataset quando applicato al contesto lombardo, caratterizzato da un clima continentale temperato e da una composizione arborea urbana differente.
+
+\subsection{Proximity buffer}
+Come abbiamo visto, un modello come SegFormer è in grado di dare un risultato accettabile in termini di detection. Per poter migliorare ulteriormente le prestazioni, vi è una metodologia applicabile in fase di post-processing, che consiste nell'implementare un buffer di prossimità attorno alle rilevazioni esistenti \cite{zhang2018proximity}.\\
+Per valutare se applicare un buffer sulla detection effettuata da SegFormer, ovvero la più performante, è necessario identificare il problema: il 74.0\% degli alberi mancati si trova entro i 50m dalle detection già mappate, quindi sono visualmente presenti ma non rilevati a causa di:\\
+
+\begin{itemize}
+    \item Ombre che mascherano gli alberi, causate dall'orario in cui le immagini satellitare sono state scattate.
+    \item Bordi delle chiome dove la segmentazione si interrompe prematuramente.
+    \item Sovrapposizioni tra alberi adiacenti che confondono la rete neurale.
+\end{itemize}
+
+\noindent
+Rilevando un albero in una data posizione, è probabile statisticamente che ci siano altri alberi nelle sue vicinanze che il modello non ha visto: il buffer aiuta a recuperare i falsi negativi.\\
+I risultati con questo procedimento di post-processing spaziale riescono a rilevare 38.304 alberi contro i 25.029, portando a 86,28\% la detection rate degli alberi del territorio comunale milanese.\\
+
+\subsection{Valutazione delle performances}
+Questo approccio di rilevamento grazie al deep learning + post-processing spaziale, che restituisce l'86,28\% degli alberi supera ampiamente gli standard accettabili per tree detection urbano (tipicamente 60-80\%) ed è da considerarsi un risultato eccellente per diversi motivi:
+
+\begin{itemize}
+    \item Alta densità urbana con sovrapposizioni complesse tra edifici e vegetazione.
+    \item Diversità delle specie arboree con morfologie variabili.
+    \item Ombre urbane e occlusioni dovute all'architettura cittadina.
+    \item Potature intensive che modificano le forme naturali delle chiome.
+\end{itemize}
+
+\noindent
+Il lavoro manuale di verifica si riduce al 13,72\% del dataset totale, rappresentando un significativo risparmio di tempo e risorse per applicazioni di gestione forestale urbana.
