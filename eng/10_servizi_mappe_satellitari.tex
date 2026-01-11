@@ -1,0 +1,94 @@
+\chapter{Satellite map services}In order to make the inference on the machine learning models described in the previous chapters, it is necessary to have satellite images of adequate quality. The market offers different platforms for the acquisition of this type of images, each with different technical characteristics, tariff plans and limitations of use.\\This chapter analyzes the main services available, comparing them according to criteria relevant to automatic tree cover detection applications: maximum resolution (zoom level), download possibilities, compatibility with ML inference and costs.\section{MapTiler}MapTiler is a platform that offers satellite map services with excellent resolution, particularly in Europe and the USA.\subsection{Tariff plans}
+\begin{itemize}
+    \item \textbf{FREE}: \$0/month (limited non-commercial use) - 100K credits
+    \item \textbf{FLEX}: from \$25/month - 500K credits\item \textbf{UNLIMITED}: \$295/month - 5M credits\item \textbf{CUSTOM}: on request - annual/quarterly billing, volume discounts\end{itemize}
+
+\subsection{Technical Details}
+\begin{itemize}
+    \item \textbf{Maximum Zoom}: up to z20\item \textbf{Download limits}: limited FREE plan, paid plans with quotas based on tile requests (1 satellite tile  4 credits)\item \textbf{ML Inference}: allowed via API\item \textbf{Download}: not allowed (except on-premise custom licenses)\end{itemize}
+
+\noindent MapTiler also offers on-demand imagery satellite via partnership with Satellogic. This platform was used for inference on the 24 Italian cities being studied.\section{Stadia Maps}Stadia Maps is a map provider with good global coverage, but with restrictive terms for machine learning applications.\subsection{Tariff plans}
+\begin{itemize}
+    \item \textbf{FREE}: \$0/month - 200K credits (50K satellite tiles) - NO commercial use, NO satellite imagery
+    \item \textbf{STARTER}: \$49/month - 2M credits (500K satellite tiles) - NO satellite imagery\item \textbf{STANDARD}: \$249/month - 15M credits (3.75M satellite tiles) - satellite imagery included
+    \item \textbf{PROFESSIONAL}: \$799/month - 60M credits (15M satellite tiles) - free 14-day trial\item \textbf{ENTERPRISE}: custom - billions of credits/year - SLA, on-premises, perpetual licenses\end{itemize}
+
+\subsection{Technical Details}
+\begin{itemize}
+    \item \textbf{Maximum Zoom}: z18-19
+    \item \textbf{Download limits}: based on tile requests (tiles 512x512px, 1 satellite tile  4 credits)\item \textbf{ML Inference}: not allowed (commercial use requires license)\item \textbf{Download}: not allowed\end{itemize}
+
+\noindent Despite the good quality of the images, the terms of service do not allow use for machine learning applications.\section{LandViewer (EOSDA)}LandViewer, developed by EOS Data Analytics, is a platform oriented to the analysis of satellite images with integrated advanced tools.\subsection{Tariff plans}
+\begin{itemize}
+    \item \textbf{FREE}: \$0 - 10 downloads/day of medium resolution images (Sentinel, Landsat), full access to analysis tools, 256GB personal cloud storage, 20+ pre-set vegetation indices, unlimited viewing
+    \item \textbf{PREMIUM}: price on request - monthly/annual, increased download limits, advanced features, priority support
+    \item \textbf{HIGH-RES (On-Demand)}: pay-per-km² - Airbus Archive 50cm: ~\$3.80/km2 (no minimum order), Airbus Archive 30cm:\$18/km2 (minimum order 25km2)\end{itemize}
+
+\subsection{Technical Details}
+\begin{itemize}
+    \item \textbf{Maximum Zoom}: z19-20+ (up to 0.30m/px with high-res)\item \textbf{Download limits}: FREE 10 downloads/day, Premium and High-Res according to plan\item \textbf{ML Inference}: allowed\item \textbf{Download}: allowed (GeoTIFF and various formats)\end{itemize}
+
+\noindent The platform includes analysis tools such as NDVI and change detection, with data sources such as Sentinel-2, Landsat, MODIS, KOMPSAT, SuperView and Gaofen. However, it is extremely expensive for high-resolution images: for a medium-sized city the cost can be around \$2000.
+
+\section{Google Maps Platform}
+Google Maps Platform provides excellent coverage globally with excellent resolution.
+
+\subsection{Tariff plans}
+\begin{itemize}
+    \item \textbf{FREE}: 10K-100K free calls/month for SKU (since March 2025)
+    \item \textbf{Pay-as-you-go}: after the free limit - Dynamic Maps \$7/1000 requests, Static Maps \$2/1000 requests, Map Tiles API various tiers
+\end{itemize}
+
+\subsection{Technical Details}
+\begin{itemize}
+    \item \textbf{Maximum Zoom}: variable z18-22 (depends on the zone, verifiable via MaxZoomService)\item \textbf{Download limits}: based on API calls\item \textbf{ML Inference}: not allowed\item \textbf{Download}: not allowed directly\end{itemize}
+
+\noindent Despite the excellent resolution and the presence of a watermark on each tile, the terms and conditions do not allow use by inference with machine learning models.\section{Mapbox}Mapbox is a widely used platform for web and mobile applications, with excellent image quality.\subsection{Tariff plans}
+\begin{itemize}
+    \item \textbf{FREE tier}: available\item \textbf{Paid plans}: from\$50/month - satellite tiles: tier 750K, 2M, 4M, 20M\end{itemize}
+
+\subsection{Technical Details}
+\begin{itemize}
+    \item \textbf{Maximum Zoom}: z0-21+ (can do overzoom)\begin{itemize}
+        \item z0-8: NASA MODIS\item z9-12: Maxar + Landsat\item z13-16: Maxar Vivid\item z16+: Vexcel aerial (sub-meter in North America/Europe)\end{itemize}
+    \item \textbf{Download limits}: based on tile requests and MAU\item \textbf{ML Inference}: to be verified (they mention ML support but with limits)\item \textbf{Download}: not directly allowed\end{itemize}
+
+\section{Copernicus Data Space Ecosystem / Sentinel Hub}The European Union's Copernicus programme offers completely free access to Sentinel satellite data.\subsection{Tariff plans}
+\begin{itemize}
+    \item \textbf{COMPLETELY FREE}: free and unlimited access to all data\end{itemize}
+
+\subsection{Technical Details}
+\begin{itemize}
+    \item \textbf{Maximum Zoom}: z16 (Sentinel-2: 10m/px, Sentinel-1 SAR available)\item \textbf{Download limits}: no limit, free access\item \textbf{ML Inference}: fully supported (dedicated libraries available as eo-learn)\item \textbf{Download}: unlimited and free\end{itemize}
+
+\noindent Despite free access and full support for ML applications, the maximum resolution of z16 (10m/px) is insufficient for detecting individual trees, making this platform unsuitable for the purposes of this research.\section{Planet Labs}Planet Labs operates one of the largest constellations of Earth observation satellites.\subsection{Tariff plans}
+\begin{itemize}
+    \item \textbf{Pricing on request}: Research/education programs up to 3000km2 available\end{itemize}
+
+\subsection{Technical Details}
+\begin{itemize}
+    \item \textbf{Maximum Zoom}: z20+ (from 3m up to 30cm depending on the satellite)\item \textbf{Download limits}: based on undersigned plan\item \textbf{ML Inference}: allowed with appropriate license\item \textbf{Download}: allowed\end{itemize}
+
+\noindent Registration requires approval with long time frames and limits are scarce for private users. It could be a good solution for academic projects, subject to verification of API availability.\section{Maxar SecureWatch / DigitalGlobe}Maxar Technologies, through DigitalGlobe, offers some of the highest resolution commercial satellite imagery available.\subsection{Tariff plans}
+\begin{itemize}
+    \item \textbf{Enterprise}: prices on request\end{itemize}
+
+\subsection{Technical Details}
+\begin{itemize}
+    \item \textbf{Maximum Zoom}: z22+ (up to 30cm/px)\item \textbf{Download limits}: enterprise\item \textbf{ML Inference}: N/D
+    \item \textbf{Download}: N/D
+\end{itemize}
+
+\noindent Very expensive platform and oriented mainly to government and enterprise customers. The high image quality does not make it accessible for individual academic projects.\section{Geoportal Veneto Region}The Geoportal of the Veneto Region provides access to orthophotos of the regional territory.\subsection{Tariff plans}
+\begin{itemize}
+    \item \textbf{FREE}: \$0 - full access without registration, non-commercial and commercial use permitted under IODL 2.0 license\end{itemize}
+
+\subsection{Technical Details}
+\begin{itemize}
+    \item \textbf{Maximum Zoom}: orthofoto AGEA 2021/2018 (z19-20)\item \textbf{Download limits}: only viewing for orthophotos (no download)\item \textbf{ML Inference}: N/D
+    \item \textbf{Download}: not allowed (view only)\end{itemize}
+
+\noindent It offers good resolution for the Veneto territory, but the limitation to visualization alone prevents its use for machine learning applications.\section{Comparison and considerations}The choice of the platform depends heavily on the specific use case. For applications of automatic detection of tree cover through deep learning, the determining factors are:\begin{itemize}
+    \item \textbf{Resolution}: you need at least z18-19 to be able to identify individual trees\item \textbf{ML Compatibility}: Many platforms explicitly prohibit use by inference\item \textbf{Possibility of download}: essential for processing images locally\item \textbf{Costs}: High-resolution solutions are often prohibitive\end{itemize}
+
+\noindent MapTiler was chosen for this search as a compromise between image quality (z20), permission to use for ML inference and low costs. Free platforms such as Copernicus, while fully usable for ML, do not achieve the resolution needed to identify individual trees in an urban context.\section{Disclaimer}All trademarks mentioned in this document belong to their respective owners. Their citation is for informational purposes only and does not imply any affiliation, approval or sponsorship by the trademark holders.

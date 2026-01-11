@@ -1,0 +1,241 @@
+\chapter{YOLO}
+YOLO is a popular convolutional neural network (CNN) that allows for real-time detection of objects within images.\\
+Unlike other computer vision algorithms, YOLO performs its analysis in a single iteration, hence the acronym YOLO, You Only Look Once.
+
+\section{Principle of operation}
+The working principle of the YOLO algorithm can be summarized in the following steps: \cite{yoloExplained}
+\begin{itemize}
+\item The input image is divided into an n x n grid.
+\item Thanks to a probability map defined a priori, the positions of multiple bounding boxes are predicted, which highlight the detected object.
+\item The class of the detected object is returned along with the corresponding bounding box.
+\end{itemize}
+the "class" of the object corresponds to the type of annotation present in the dataset used for model training: in our case, since the model must recognize the presence of trees in a given satellite image, we will have only one class relating to trees.\\
+
+\section{Type of model used}
+YOLO models have evolved over time and are still being developed to increase their accuracy and performance; each new version seeks to achieve higher accuracy and lower inference times than previous models.\\
+YOLO's deep learning algorithm is developed using the PyTorch framework.
+
+\subsection{PyTorch}
+It is an open-source deep learning framework in Python, created to facilitate the creation, training and deployment of neural network models \cite{pytorch}. Among its main features are:
+\begin{itemize}
+    \item Support for tensors, i.e. multidimensional arrays, that can be processed on CPU or GPU with parallel computation.
+    \item Includes modules for creating complex neural networks with gradient calculation for optimization.
+    \item It offers libraries such as torchvision to support computer vision and torchtext for natural language processing.
+    \item Cross-platform compatibility and broad support thanks to its large community.
+\end{itemize}
+
+\subsection{Model version}
+The version of YOLO used in this project is version 11, introduced in 2024, which guarantees better accuracy in predictions and higher speed. Additionally, a version optimized for edge devices, such as smartphones or embedded systems, is available.\\
+Unlike some older versions of YOLO, here we have the ability to use pre-trained models in training procedures, thus making training possible even with reduced datasets.\\
+YOLO models are available in various "sizes": in fact, in addition to the extralarge versions, which are more precise and complete, there are also medium and small versions that are suitable for use on devices with more limited resources.\\
+Observing some comparison statistics between various YOLO systems, with the same dataset, there is a significant improvement in average accuracy values (mAP50) compared to previous versions even for medium-sized models (e.g. YOLov11m vs YOLov10m) and a reduction in the time required to perform model inference. \cite{yoloBenchmarks}
+
+\subsection{YOLO Ultralytics}
+Ultralytics is a commercial platform that has developed libraries, usable under the AGPL-3.0 license, specifically designed to facilitate training and inference with YOLO models \cite{yolov11Ultra}.\\
+Using these libraries also offers the significant advantage of being able to convert YOLO PyTorch models to other formats, such as Tensorflow JS, making them usable on web frontend applications.
+
+\section{Preparing the dataset}
+As already introduced in the previous chapter, having a well-formed dataset is crucial for proceeding with YOLO model training: without an adequate number of images and annotations, training would indeed be ineffective.\\
+In this specific case, which requires the detection of trees in the urban fabric, the choice of data source is not trivial: most models that recognize this type of plant are trained on datasets that include satellite images of countryside or wooded areas.\\
+For the training of this model, however, a dataset distributed online by the University of Lleida in Spain was used \cite{lleidaDataset}, consisting of a set of training images and an evaluation set.\\
+It contains precise annotations of trees in an urban context, with images already in YOLO-compatible format (640x640).\\
+
+\section{Training script}
+The following are some fundamental functions for training a YOLO model, leveraging the Ultralytics libraries: they are not to be considered exhaustive, but illustrate the basic operations for training and collecting statistical data related to the quality and performance of the model.
+
+\subsection{Init}
+
+\begin{lstlisting}
+import torch
+from ultralytics import YOLO
+from pathlib import Path
+import os
+
+baseFolderPath = "../myDataset"
+datasetYamlPath = f"{baseFolderPath}/dataset.yaml"
+\end{lstlisting}
+
+\subsection{Parameters}
+\noindent
+The necessary parameters, specific to the training of the Lleida YOLO11x model, to be provided to the Ultralytics library training function, are defined below: \\
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|l|l|l|p{6cm}|}
+\hline
+\textbf{Property} & \textbf{Type} & \textbf{Range} & \textbf{Description} \\
+\hline
+\textit{imgsz} & int & & Input image size, must be square, so only one value is specified for all sides \\
+\textit{device} & string & \texttt{cpu}, \texttt{cuda}, \texttt{mps} & Declares the type of device on which training is launched \\
+\textit{workers} & int & & Number of processes or threads that can run simultaneously\\
+\textit{save\_period} & int & & Number of epochs required before saving model weights \\
+\textit{project} & string & & Main path where trained data is saved \\
+\textit{name} & string & & Project name, used to create a subdirectory containing outputs \\
+\textit{pretrained} & boolean & \texttt{true}, \texttt{false} & If true, starts from a pre-trained model (transfer-learning) \\
+\textit{lr0} & float & (1e-5, 1e-1) & Initial learning rate. Low values make the training process more stable but slower \\
+\textit{lrf} & float & (0.01, 1.0) & Final learning rate, specified as a fraction of lr0. Manages how much the learning rate should slow down during training \\
+\textit{cos\_lr} & boolean & \texttt{true}, \texttt{false} & If true, the initial rate scheduler follows a cosine curve instead of growing linearly. Improves convergence and leads to higher precision \\
+\textit{cache} & string & \texttt{none}, \texttt{ram}, \texttt{disk} & Specifies where data is temporarily saved to ensure faster learning speed \\
+\textit{cls} & float & (0.2, 4.0) & Loss function multiplier, useful for controlling training progress. Can be increased if the model struggles to recognize objects.  \\
+\textit{single\_cls} & boolean & \texttt{true}, \texttt{false} & If true, the model considers all annotations as a single class \\
+\hline
+\end{tabular}
+\caption{Training parameters for YOLO11}
+\end{table}
+
+\noindent
+The Python object containing the parameters is initialized as follows:
+\begin{lstlisting}
+trainArgs = {
+    'data': datasetYamlPath,
+    'epochs': 300,
+    'imgsz': 640,
+    'batch': 16,
+    'device': device,
+    'workers': 8,
+    'patience': 100,
+    'save_period': 5,
+    'project': f"{baseFolderPath}/runs/detect",
+    'name': 'treeDetectionYolo11Scratch',
+    'pretrained': True,
+    'lr0': 0.01,
+    'lrf': 0.1,
+    'cos_lr': True,
+    'cache': "disk",
+    'single_cls': True
+}
+\end{lstlisting}
+
+\subsection{Training function}
+\begin{lstlisting}
+results = model.train(**trainArgs)
+metrics = model.val()
+\end{lstlisting}
+With these two lines, the actual training procedure is launched.\\
+On line 1, the function \textit{model.train(**trainArgs)} is called which, thanks to the \textit{train\_args} set previously, begins the training process: the training results are then saved in the variable \textit{results}.\\
+In the second line, the script performs model validation using the validation set, which is fundamental for measuring the performance acquired during training. The function output returns evaluation metrics such as mAP (mean Average Precision), precision, recall, etc.\\
+
+\subsection{Output of the training procedure}
+\begin{lstlisting}
+Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size
+1/300      15.3G      1.989      1.919      1.688         63        640: 100%|**********| 54/54 [00:41<00:00,  1.31it/s]
+Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100%|**********| 7/7 [00:04<00:00,  1.40it/s]                   
+all        218       3262   0.000154    0.00276   7.76e-05   2.15e-05
+\end{lstlisting}
+
+\noindent
+During the training procedure, some useful statistics are displayed in the console to monitor training progress.\\
+Above are a couple of example lines with output values, from both the training and validation functions.\\\\
+Training statistics:\\
+\begin{itemize}
+    \item \textit{Epoch}: progressive epoch count.
+    \item \textit{GPU\_mem}: total VRAM used (in this case training was done with CUDA).
+    \item \textit{box\_loss}: measures the distance between the position and size of the bounding boxes predicted by the model compared to the actual (ground truth) bounding boxes.
+    \item \textit{cls\_loss}: measures the loss relative to classification, i.e. how well the model is identifying objects.
+    \item \textit{dfl\_loss}: improvement of bounding box regression.
+    \item \textit{Instances}: number of objects processed in this batch/epoch.
+    \item \textit{Size}: size of input images.
+    \item \textit{Progress bar} \%|...|: n/n [00:00:00 z it/s] the number (n) of batches processed in a certain period of time in seconds at a certain speed defined as z measured in batches per second.
+\end{itemize}
+
+\noindent
+Validation statistics:
+\begin{itemize}
+    \item \textit{Class}: indicates for which classes validation is performed.
+    \item \textit{Images}: number of images in the validation set.
+    \item \textit{Instances}: number of trees in the validation set images.
+    \item \textit{Box(P)}: precision in bounding box detection.
+    \item \textit{R}: recall, see above
+    \item \textit{mAP50}: see above
+    \item \textit{mAP50-95}: see above
+\end{itemize}
+
+\section{Training Results}
+
+\subsection{Graphs}
+The Ultralytics platform, after completing the training phase, produces some graphs that help better visualize the performance of the trained model. Perhaps the most significant graph is the one related to the F1 curve:
+
+\begin{figure}[H]
+  \includegraphics[width=\textwidth]{assets/yolo_train_F1.png}
+  \label{fig:yolo_f1}
+  \caption{F1-Confidence Curve. Confidence value on the x-axis, F1 value on the y-axis.}
+\end{figure}
+
+\noindent
+The maximum of the curve represents the optimal point where the confidence threshold provides the best compromise between precision and recall. The maximum F1 score of 0.67 is obtained with confidence 0.416.\\
+This graph is very important for choosing the confidence value to provide during the inference phase, where false positive (precision) and false negative (recall) phenomena are minimized as much as possible.
+
+\begin{figure}[H]
+  \includegraphics[width=\textwidth]{assets/yolo_train_PR.png}
+  \label{fig:yolo_pr}
+  \caption{Precision-Recall Curve. Recall value on the x-axis, precision value on the y-axis.}
+\end{figure}
+
+\noindent
+This graph shows the relationship between precision and recall, with the mAP50 value of 0.707, indicating the average precision at recall intervals for all classes, in this case only for trees, at the IoU threshold of 0.5.\\
+Essentially, it highlights the balance between the model's ability to correctly identify objects (precision) and the ability to find them all (recall) for various confidence threshold levels.
+
+\begin{figure}[H]
+  \includegraphics[width=\textwidth]{assets/yolo_train_cm.png}
+  \label{fig:yolo_cm}
+  \caption{Confusion matrix. Shows the classes that the model is able to detect.}
+\end{figure}
+
+\noindent
+The confusion matrix shows how the model classifies the classes on which it was trained. In this case there is only one class "item", i.e. the tree, while "background" is everything that is not considered a tree. The graph can be summarized as follows:
+
+\begin{itemize}
+    \item Predicted "item", True "item" (0.78): the model correctly identified 78\% of trees.
+    \item Predicted "background", True "item" (0.22): 22\% of trees were classified as "background" (false negative).
+    \item Predicted "item", True "background" (1.00): All "background" was classified as such (true negative).
+    \item Predicted "background", True "background" (0.00): No "background" was misclassified as tree (false positive absent).
+\end{itemize}
+
+\section{Inference}
+After training the model with the Lleida dataset, it is possible to proceed with inference on other images to verify the presence of trees.\\
+Below is the Python function for YOLO inference with Ultralytics, using the PyTorch library, along with OpenCV which is used in this case to work with input and output images.\\
+It is important to ensure that the input images are in the same format as those prepared for training, in this case 640x640; they must therefore respect the resolution and RGB channel composition.
+
+\subsection{Predictive analysis function}
+\begin{lstlisting}
+def analyze_tree_coverage(imagePath, modelPath, conf=0.05):
+    model = YOLO(modelPath)
+    img = cv2.imread(imagePath)
+    results = model(img, conf=conf)
+    
+    for result in results:
+        if result.boxes is not None:
+            boxes = result.boxes.xyxy.cpu().numpy()
+            confidences = result.boxes.conf.cpu().numpy()
+            
+            for box, confidence in zip(boxes, confidences):
+                if confidence >= conf:
+                    x1, y1, x2, y2 = box.astype(int)
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    
+    outputPath = Path(imagePath).stem + "_result.jpg"
+    cv2.imwrite(outputPath, img)
+\end{lstlisting}
+
+\noindent
+The function dedicated to searching for trees within the image requires three input parameters:
+\begin{itemize}
+    \item \textit{image\_path}: path of the image to be analyzed
+    \item \textit{model\_path}: path of the trained model to use for inference
+    \item \textit{conf}: minimum confidence level within which the predictor considers the object as valid
+\end{itemize}
+The first four lines concern the initialization of the YOLO model, reading the image using OpenCV, and the direct call to the prediction function on line 4, where the detection results are saved in \textit{results}.\\
+OpenCV is a very versatile library that offers functions and utilities for computer vision: here it is used to read the image from file and to overlay the bounding boxes that delimit the detected trees \cite{opencv_library}.\\
+Subsequently, the prediction results are analyzed one by one: for each result, it is verified whether a bounding box is associated, i.e. the rectangle that outlines the object found within the image. If present, it extracts the coordinates and detection confidence, saving them in \textit{boxes} and \textit{confidences} respectively.\\
+Each extracted box is then drawn, via OpenCV, on the output image, only if the detected confidence exceeds the threshold specified as an input parameter.
+
+
+\section{Importance of the urban dataset}
+The dataset used for training this specific YOLO model consists of a series of satellite images containing trees located in urban areas. These datasets are rare because they are very specific. Most of those available online or on major platforms are in fact images collected in rural contexts. Furthermore, thanks to the large amount of images present in rural datasets, the values of mAP50, mAP50-95 and F1 are generally much higher.\\
+Considering therefore the difficulty of accessing this type of data, why use and even train a model on an urban dataset when many pre-trained models are available? The answer is less trivial than one might think; in fact, not only the annotated object is relevant, its "context" is also important, as in this case the surrounding urban environment.\\
+The test performed was very simple: run inference on a specific image both with the model trained with the Lleida dataset and with a model trained on a dataset available on Roboflow, which shows images and annotations in an extra-urban context \cite{tree-project-cyyr8_dataset}.\\
+The results of the comparison, performed on a satellite image of Lungadige San Giorgio in Verona, show that the model trained with the Lleida dataset correctly detects most of the trees present along the river, while the model trained on forests erroneously identifies only a few canopies, confusing urban vegetation with the background.\\
+The model trained with a dataset containing urban images therefore performs considerably better than the one trained with images of forests and plantations.\\
+A similar difference was also found by researchers at the University of Beijing, where in an article they discuss the use of YOLov4-Lite for tree detection in urban and non-urban plantations (such as orchards), reporting difficulties due to the high rate of false detections in forests, caused by the similarity between the colors of the background and those of the canopy \cite{yolo4plantation}.

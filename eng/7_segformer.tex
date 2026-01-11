@@ -1,0 +1,181 @@
+\chapter{SegFormer}
+The advent of modern LLMs has introduced numerous innovations in the field of machine learning: although designed primarily for natural language, they have brought features also applicable to computer vision, as in the case of transformers.\\
+These form the basis of a deep learning algorithm called SegFormer, a portmanteau of "segmentation" and "transformer", which uses transformers to classify the pixels of objects within images through what, as illustrated in the second chapter, is called vision transformer (ViT) architecture \cite{xie2021segformersimpleefficientdesign}.
+
+\section{Principle of operation}
+SegFormer is an algorithm that uses transformers to isolate objects, but is not limited to that: it performs true semantic segmentation, i.e. it assigns a class to each pixel of the image, in this case "tree" and "background".\\
+The transformer implemented in this specific algorithm is a variant of the classic ViT, called MixTransformer (MiT). In addition to the MiT, there is also a decoder called Multi-layer Perceptron (MLP), which is fundamental for semantic segmentation of images.\\
+The operation can be summarized as follows:
+
+\begin{itemize}
+    \item MixTransformer is the backbone of SegFormer, i.e. the part of the neural network that extracts all features from the input data, namely the images. MiT, which is essentially the network encoder, implements a hierarchical structure that divides the image into parts (patches) and then processes them with transformer blocks.
+    \item Each stage of the MiT produces feature maps that have different resolutions and depths, as seen previously for Detectron2, maintaining a spatial structure with reduced complexity compared to the ViT, which instead works directly on the entire image.
+    \item The SegFormer decoder is an MLP, which aggregates the multi-scale features obtained by the MiT during the encoding phase, providing a complete pixel-by-pixel representation. This combines both the global context (arrangement of objects in the image, what is "in front", what is "behind" in the background) and local information (object edges).
+    \item Aggregation occurs without convolutions, as the decoder learns to weigh and combine information received from the backbone, making predictions more robust and precise.
+\end{itemize}
+
+Having understood how SegFormer operates, it would be easy to compare this type of algorithm to CNNs or R-CNNs, already encountered in previous chapters; after all, they process images and transform them into numbers, such as tensors or matrices. The real difference is how spatial and contextual image information is processed: CNNs use convolutional filters and extract features and objects from images, analyzing small portions and following a spatial hierarchy, while ViTs divide the image into patches and treat them as if they were independent tokens, similar to the way LLMs for natural language treat words. In essence, CNNs are more effective at extracting local objects by highlighting them, such as the single crown of a tree, while transformers are more effective at capturing the overall context, using mechanisms to model global relationships between all patches.\\
+Precisely for this reason, SegFormer is not able to distinguish one single tree from another by isolating its crown, but it can recognize where trees are in an extremely effective way \cite{visionplatform2025vit}.
+
+\section{Type of model used}In the network it is possible to download different models of SegFormer, with more or less developed variants of encoders and decoders, suitable for isolating objects of various kinds within the images. Some are also linked and available from the official repo on NVlabs, Nvidia's artificial intelligence research project\cite{nvlabs_segformer}.\\The available and trainable models are in pt format, so they can be loaded with PyTorch as seen in previous chapters.\subsection{Model version}At the beginning of the chapter we saw that SegFormer is made up of encoders and decoders. However, there is not only one type of MiT encoder, but there are several versions and revisions that have been released over time to increase the precision and scalability of the model, in this case the starting model is Nvidia and is named\textit{mit-b3}.\\The MiT is released in fact in several cuts, from b0 to b5, where b3 indicates an intermediate capacity: as the version of b increases, parameters, depth and representative capacity also increase.\\It is also necessary to specify that the term "starter model" is important, as it is not used as-is, which could also work if we were to find ourselves in case the need was to identify various types of objects, but it is used to create a new model after training it with a dedicated dataset as, as previously seen for YOLO, it is necessary to carry out specific training on an urban dataset to ensure that the only two classes to be recognized are background.\section{Preparing the dataset}Given the relatively recent implementation of SegFormer, it is not easy to acquire well-trained datasets for model training, especially if they are as specific as may be required by this research. In particular, given the requirements related to trees photographed by satellite in urban fabric, the idea was to use the YOLO dataset, which meets all the necessary characteristics, converting it to train a SegFormer model.\\The concept is to use the original tiles, with the only difference of replacing the files containing the coordinates of the bounding boxes with masks, so as to turn out the dataset compatible with SegFormer. A corresponding binary mask is then generated for each image of the dataset, where the area covered by the YOLO annotations is highlighted.\\\\The area of the mask is precisely white, but it is only to highlight for educational purposes what is the area that is considered as "covered" by trees. In fact, in this specific case, the color of the boxes would be almost imperceptible: SegFormer can be trained to recognize multiple objects at once, each object class must be assigned a color, black is commonly considered as the background color, while in the case of trees a color very close to black is assigned, almost imperceptible to the naked eye, representing the first class. These colors are not actual RGB tints, but numeric (whole) values in a grayscale or indexed image, which SegFormer interprets as class labels.\subsection{YOLO Dataset Converter}The conversion of the dataset can be done with a simple Python script, which is responsible for creating the masks starting from the path of the YOLO dataset, as long as it is properly organized in the val, train and test folders with images and files that define the bounding boxes, then that contain the annotations.\begin{lstlisting}
+import os
+from PIL import Image
+import numpy as np
+
+def create_segmentation_mask(boxes, img_width, img_height, num_classes=1):
+    mask = np.zeros((img_height, img_width), dtype=np.uint8)
+    
+    for i, (class_id, x1, y1, x2, y2) in enumerate(boxes):
+        
+        orig_coords = (x1, y1, x2, y2)
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(img_width, x2)
+        y2 = min(img_height, y2)
+        
+        if x2 <= x1 or y2 <= y1:
+            continue
+            
+        mask_value = int(class_id) + 1
+        if mask_value > num_classes:
+            mask_value = 1
+        
+        mask[y1:y2, x1:x2] = mask_value
+        actual_value = mask[y1, x1] if y1 < img_height and x1 < img_width else -1
+    
+    return mask
+
+\end{lstlisting}
+
+\noindent Several parameters are passed to the function:\begin{itemize}
+    \item \textit{boxes}: is the list of bounding boxes defined for the image, in the format [\textit{class\_id}, \textit{angle\_High\_sx\_x1}, \textit{angle\_High\_sx\_y1}, \textit{angle\_Low\_dx\_x2}, \textit{angle\_Low\_dx\_y2}]
+    \item \textit{img\_width}: Input image width.\item \textit{img\_Height}: height of the input image.\item \textit{num\_Classes}: number of classes, integer value that must be set to 1 in case the class is unique, as in this.\end{itemize}Using Pillow\cite{clark2015pillow}, a library for image manipulation, an empty image of the resolution equal to that of the source image is initialized. Next for each bounding box, starting with the origin coordinates at the top left and bottom right, the relative mask is created, checking however if it is formed by a valid square or the coordinates are incorrect.\\The bounding box area is then filled, taking into account the class stated in YOLO's annotation. In this specific case the\textit{class\_id}can only be 1, as there is only one type of annotated object that corresponds to the tree, while zero is used for the background.\\Finally, the function returns the segmentation mask in the form of a NumPy array, which represents the image of the mask. From the mask in NumPy format it is then possible to save it in an rgb image thanks to OpenCV\textit{cv2.imwrite(str(outputPath), mask)}.
+
+\section{Training Scripts}As with YOLO, to reduce the considerable training time of the SegFormer models, the idea was to resort to the transfer learning technique, especially for mit-b4 and mit-b5.\\In this case it is mandatory to equip yourself with a GPU with CUDA support, any other solution that does not provide for its use could prove to be really inefficient.\subsection{Init}
+\begin{lstlisting}
+import os
+import numpy as np
+import argparse
+from PIL import Image
+from transformers import (
+    SegformerForSemanticSegmentation,
+    SegformerImageProcessor,
+    pipeline
+)
+
+image_processor = SegformerImageProcessor.from_pretrained("nvidia/mit-b3")
+\end{lstlisting}
+
+\noindent In addition to the already known OpenCV, NumPy and Torch, these functions are based on the use of Hugging Face libraries.\textit{SegformerForSemanticSegmentation} e \textit{SegformerImageProcessor}are part of the Hugging Face transformer library, allow you to train and use the SegFormer model. Hugging Face is a well-known platform in the open source community on artificial intelligence, especially for its Transformer library and its Model Hub, where developers can share pretrained models\cite{wolf-etal-2020-transformers}.\\Finally, it is stated as\textit{image\_Processor}the Hugging Face pre-processor optimized for the SegFormer model to use, i.e. the aforementioned\textit{nvidia/mit-b3}. The processor performs a number of operations on input images, such as:\begin{itemize}
+    \item transformation of the image from the original format, in this case NumPy, to the Tensor format compatible with PyTorch.\item normalization carried out on the RGB channels of the input image to be uniform to the format used in the pretrained model.\end{itemize}
+
+\subsection{Parameters}
+\begin{lstlisting}
+model = SegformerForSemanticSegmentation.from_pretrained(
+            "nvidia/mit-b3",
+            num_labels=self.numClasses,
+            ignore_mismatched_sizes=True
+        )
+
+training_args = TrainingArguments(
+    output_dir="./results",
+    num_train_epochs=40,
+    per_device_train_batch_size=2,
+    eval_strategy="epoch",
+    remove_unused_columns=False,
+)
+\end{lstlisting}
+
+\noindent
+
+
+\noindent The array\textit{treeClasses}contains the classes for tree segmentation, in this case only background and tree, with its numeric ids and the colors to be associated with each class to produce the display of the masks in overlay (if implemented).\\Then there are, a bit as already seen for the training of the YOLO model, the training parameters:\begin{itemize}
+    \item \textit{model}: It is the model, in this case pre-trained, for semantic segmentation loaded with the dedicated function of the Hugging Face library.\item \textit{num\_Train\_Epochs}: Number of training epochs.\item \textit{for\_Device\_Train\_batch\_size}: Number of images (or samples) processed at the same time.\item \textit{eval\_strategy}: Parameter indicating when to carry out the validation phase. If "epoch" is specified, it is carried out at the end of each epoch.\item \textit{output\_dir}: Output path where trained PyTorch models are saved, at the end of each epoch.\end{itemize}
+
+
+\subsection{Training function}
+\begin{lstlisting}
+def trainModel():
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=trainingSet
+    )
+
+    train_result = trainer.train()
+    trainer.save_model()
+\end{lstlisting}
+
+\noindent This function is responsible for the actual training of the model, which takes place thanks to the Hugging Face libraries.\\First, initialize the\textit{Trainer}, a high-level class that manages model training, including:\begin{itemize}
+    \item Forward and backward pass of the model.\item Calculation of loss and optimization of loss function.\item Periodic evaluation of metrics.\item Saving checkpoints at the end of each epoch and at the end of training.\item Logging and console monitoring of training info.\end{itemize}
+
+\noindent The forward pass is the process of propagating the input through the network, to get to the output output, in this specific case it is the prediction of tree cover.\\The backward pass is after the prediction, the loss function that measures the error between prediction and real value mapped in the mask is calculated. In doing so, the weights are updated backwards, via an optimizer.\\\\With\textit{trainer.train()}training is launched, the results are then copied into\textit{train\_result}and later\textit{trainer.save\_Model()}save the model to the path specified for the output. This model can then be used later for inference.\subsection{Output of the training procedure}
+\begin{lstlisting}
+epoch Training Loss	Validation Loss	Mean Iou Mean Accuracy Overall Accuracy	Per Category Iou Per Category Accuracy
+1 0.988000 0.408625	0.712276 0.807701 0.914090	[0.9053025529456493, 0.5192490975926009] [0.955735232841766, 0.6596663623426008]
+\end{lstlisting}
+
+\noindent The procedure produces, as for YOLO training a series of values for each epoch, which indicate the progress of the training of the model.\\
+\textit{Training Loss} e \textit{Validation Loss}measure the quality of optimization of the model. Low loss values indicate that learning in training and validation are good.\\
+\textit{Mean Iou}is the average of the IOUs (Intersections over Union) calculated for each class. As seen for YOLO, it indicates the ratio of the overlap area between that affected by the model prediction and the ground truth. The result is better with a high value.\\
+\textit{Mean Accuracy}accuracy average for each class, while\textit{Overall Accuracy}global accuracy on all pixels in the image.\\
+\textit{For Category Iou} e \textit{For Category Accuracy}show an array with values for each class of IoU and Accuracy. In this case two classes are shown, "background" and "tree".\section{Inference}Once the model is trained it is possible to proceed to inference on satellite images. The inference procedure is also carried out thanks to the Hugging Face libraries, which in this case facilitate the prediction operation, but are not strictly necessary: the model produced in any case has a format that can be loaded by PyTorch, so to use it it it is also possible to proceed with the implementation directly published by Nvidia, or with other third-party libraries.\\In this case, for consistency and practicality, the code that exploits Hugging Face libraries is shown.\subsection{Predictive Analysis Function}
+\begin{lstlisting}
+def imagePrediction(image_path: str, model_path: str, confidence: float):
+    image = Image.open(image_path).convert("RGB")
+    processor = SegformerImageProcessor.from_pretrained("nvidia/mit-b3")
+    model = SegformerForSemanticSegmentation.from_pretrained(model_path)
+    
+    inputs = processor(image, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model(**inputs)
+        
+    logits = outputs.logits
+        
+    probabilities = torch.nn.functional.softmax(logits, dim=1)
+        
+    tree_prob = probabilities[0, 1].cpu().numpy()
+    mask = (tree_prob > confidence).astype(np.uint8)
+\end{lstlisting}
+
+\noindent The prediction function accepts two parameters in input,\textit{image\_path} e \textit{model\_path}, respectively image path and trained model. It is also required to specify the confidence threshold which, as with other models seen so far, is the limit within which a detected object is considered good or not.\\Next it is necessary, as previously for the dataset, to preprocess the images thanks to the\textit{SegformerImageProcessor}, where also in this case the "origin model" that establishes the data format should be specified. Thanks to this preprocessing you have a great advantage because it is possible to provide in input images also of different resolution, since it will then be the processor to standardize them.\\The actual loading of the trained model takes place in line four, and the next line is then effectively processed the image.\\The inference is launched on the image thanks to the call that the library exposes, directly in the class that manages the model\textit{model(**inputs)}and provides some important information in output:\begin{itemize}
+    \item \textit{.logits}: raw scores of the prediction.\item \textit{.loss}: value of loss function.\item \textit{.attentions}: attention weights, i.e. the numerical values that are assigned to the subjects "observed" by the model, for example for a tree could be 0.8 for the leaves, 0.6 for the trunk. The closer to 1, the more important the value.\end{itemize}
+
+\noindent In this specific case, to define the mask that isolates trees, the scores are sufficient, which are passed to a PyTorch function called activation. This particular function, Softmax, takes raw score data that assigns a score to the pixel, such as attention weights and is converted into a probability, i.e. the more score a pixel totals, the more likely it is to be a tree.\\The last two instructions are those that extract the binary mask containing the prediction result "tree" or "non-tree", extracting the probabilities of the class "tree" with NumPy and discarding those that are below a certain confidence threshold.\subsection{Quality of Prediction}In order to display the result of the prediction it is then possible, with OpenCV go to superimpose the mask to the original image. The implementation is not shown here but can be found, with some variation, on the original repo of SegFormer in the tools and demos.\\It is significant to see the result of the prediction that is carried out by SegFormer, in fact the graphic representation highlights all the model data such as the tree cover, with the relative binary mask that goes to outline the contours of the urban areas planted and also the probability, in the form of heatmap that represents the probability distribution of the model.\\It is interesting to note that, unlike DetecTree, the areas covered by trees are highlighted but not because of the simple proximity of pixel color as seen precisely with the AdaBoost algorithm: in this case not even the shadows of the trees themselves, which stand out on the Adige river, are included in the mask.\\The result of the prediction includes the binary mask that outlines the contours of the planted areas and a heatmap that represents the probability distribution of the model, allowing you to accurately visualize the areas identified as tree cover.\section{Watershed Application}SegFormer is very effective at isolating groups of trees within an image, but not being able to distinguish them on time. In this regard it is possible to use a post-processing technique called watershed, therefore downstream of SegFormer's detection\cite{kornilov2018watershed}.\\This is a technique based on mathematical morphology, which analyzes the image by separating adjacent objects in a completely agnostic manner regarding their content: it is not able to distinguish what is tree and what is not but, starting from the isolated areas thanks to SegFormer, the only type of insulating objects will be implicitly trees, thus allowing to identify the foliage and the number of trees present.\\Summing up the operation in brief:\begin{itemize}
+    \item The algorithm takes an input grayscale image.\item The image is interpreted as a surface, where pixels represent altitudes.\item You select pixels or starting regions called markers, which can identify the labels of the lowest points, the local minima, or the highest ones like the local maxima. In our case it will be the maximums, that is, the tips of the trees, that will be identified.\item The image is segmented by a floating process, hence the term watershed (filling basins), where the regions are "filled" from markers.\item In each step the pixels bordering the floated regions are sorted according to the gradient value, placing them in a priority queue: the pixel of minor (or greater in the case of maximums) value is assigned to the basin of the nearest marker.\item The boundaries between the basins constitute the watershed line, i.e. the border between the different elements of the image.\end{itemize}
+
+\subsection{Segmentation function}Here a function is reported that deals with finding regions and elements thanks to the watershed process, starting from a mask supplied in input as a parameter.\\To make the operation more efficient, you can take advantage of two well-known libraries in Python, such as Scikit and SciPy: the first is used for image processing and has already been introduced in the chapter on Detectree, while the second is an open-source library that offers numerous data processing tools, including optimization algorithms, interpolation and signal processing\cite{2020SciPy-NMeth}.\\
+
+\begin{lstlisting}
+from scipy.ndimage import distance_transform_edt, label
+from skimage.feature import peak_local_max
+from skimage.morphology import watershed
+from skimage.measure import regionprops
+import numpy as np
+    
+def watershedSegmentation(mask, minDistance, offsetX=0, offsetY=0):
+    distanceMap = distance_transform_edt(mask)
+    
+    peakCoords = peak_local_max(
+        distanceMap, 
+        min_distance=minDistance, 
+        labels=mask, 
+        footprint=np.ones((3, 3))
+    )
+    
+    markers = np.zeros_like(mask, dtype=np.int32)
+    for i, (y, x) in enumerate(peakCoords, start=1):
+        markers[y, x] = i
+    
+    labelsWatershed = watershed(-distanceMap, markersLabeled, mask=mask)
+    
+    treeCrowns = []
+    for treeId in range(1, labels.max() + 1):
+        crownMask = (labels == treeId)
+        treeCrowns.append(crownMask)
+    
+    return treeCrowns
+
+\end{lstlisting}
+
+\noindent The function\textit{distance\_Transform\_edt}of SciPy is used to create the distance map, which is subsequently provided in input to the function\textit{peak\_Local\_max}, belonging to the scikit-image library, to locate markers.\\Then the coordinates of the peaks are transformed into a numerical marker map, where each marker has a unique label assigned to the growth of the watershed basins.\\Then it is invoked\textit{watershed}, scikit-image function, which progressively "floods" the image starting from the markers, and then stops only when the boundary lines meet, thus detecting the boundaries of the objects.\\Finally, the masks of the objects detected and stored in the array are isolated\textit{treeCrowns}, which can be used for area, perimeter or overlay display on delimited objects.\subsection{Segmentation Result}The watershed segmentation process produces three progressive outputs: starting from the source satellite image, the SegFormer mask is first generated that highlights the detected tree areas in green, and then the watershed segmentation is applied that distinguishes the individual crowns of the trees, identifying them with different colors. This allows each individual tree to be counted and located within the areas previously identified as planted.

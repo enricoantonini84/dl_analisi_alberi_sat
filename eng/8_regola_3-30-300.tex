@@ -1,0 +1,153 @@
+\chapter{Application of the 3-30-300 rule and tree map}The previous chapters deal with the analysis of models and networks that, properly trained and parameterized, manage to isolate green areas and trees.\\The research is focused in particular on the detection of trees present in the urban fabric, not only to compare and evaluate the performance of the models themselves, but also to try to derive in a completely automatic way the coordinates of each tree, in latitude and longitude, so that it can be mapped on information systems such as GIS.\\The Geographic Information System (GIS) is a technology that allows to analyze georeferenced data to display cartographic elements organized in overlapping layers, allowing to obtain structured visual representations from raw data\cite{gisUsgs}.
+
+\section{Rule of 3-30-300}The ultimate goal of this research is therefore to produce a data stream, properly formatted according to the GIS software or the implemented solution, that can contain a precise geographical position of the trees in the city of Verona.\\This will then be used to calculate a particular indicator, in reference to the 3-30-300 rule.\subsection{Definition}The 3-30-300 rule is a principle devised by Professor Cecil Konijnendijk, which defines the criteria for ensuring access to green in cities, so as to make them more livable and more sustainable\cite{Konijnendijk2023}. The three criteria are:\begin{itemize}
+\item3 visible trees: each resident should be able to see at least 3 trees from their own window.\item 30\%of tree cover in the neighborhood: at least 30\%of the area of the neighborhood should be covered by trees, considering the foliage.\item300 meters away from the nearest green space: each resident should have a park at most 300 meters from their home.\end{itemize}
+
+\subsection{Data collection}To be able to calculate the indicator 3-30-300, which is the subject of another specific research on the subject, it is therefore no longer enough to be content with detecting trees, but instead it is necessary to create a real map from satellite images, so that you can locate each tree in a distinct way and with a geographical location.\section{Map of trees}The models analyzed so far, to identify trees from satellite images, return images with annotations and bounding boxes to highlight the confidence and position of trees in the image itself: would it be possible to use this type of information, to also identify the position of trees in a not only visual but also geographical way? To answer this question it is necessary to familiarize a particular image format, which precisely combines coordinates of the image with geographical data: the GeoTIFF.\subsection{TIFF and GeoTIFF}TIFF is a popular raster image format, which originated as a method for exchanging images between printers and scanners, given its feature of being able to support properties and data related to the image itself. On the one hand it leads this format to be very flexible, on the other hand the fact that it can support many compression schemes and features, it leads TIFF to be complicated to use because the application that has to read it must be able to fully support the format\cite{tiff}.\\\\GeoTIFF leverages the flexibility of TIFF to include geographic location metadata, thus becoming a de facto standard for organizations and the community of people working with geospatial data\cite{geotiff}.\\This type of format is also supported by GIS systems.\subsection{From JPG to GeoTIFF}Unfortunately, in many cases satellite maps available on location platforms, commercial or open source, are in vector format or JPG or PNG raster and it is therefore impossible to use that type of images in a georeferenced context. For this objective, the simple satellite images used for tree detection are not enough to extract usable data to do analysis on maps and indicators via GIS.\\To overcome this problem, Rasterio, a Python library that not only can read GeoTIFF formats, but is also able to manipulate them by associating a specific pixel position with a spatial position in terms of latitude/longitude coordinates, comes to our aid.\cite{rasterio}. Rasterio leans on the well-known GDAL\cite{GDAL}, an acronym for Geospatial Data Abstraction Library, in fact offers the Python interface to go and take advantage of the powerful library in C++ that processes raster files.\subsection{Pixel-coordinate conversion}Satellite map providers usually offer endpoints that allow you to download small "tiles" of a map, one at a time, called tiles: it would be unthinkable in fact to download the entire map of an entire city. In order to access the tiles you need to specify three parameters, namely the zoom and the lat/long coordinates of the northwest corner of the tile, in doing so you will have a small tile (e.g. 512x512) but which has a precise geographical position.\\To arrive at the result it is possible to proceed in two ways:\begin{itemize}
+\item Transforming tiles into GeoTIFF: If the model to be used for tree detection accepts into input images that have the same resolution as downloaded tiles, you can transform the image directly into GeoTIFF with Rasterio.\item Merge the tiles into a larger image and convert it to GeoTIFF: if the model has specific resolution inputs other than those of the downloaded tiles, then it is necessary to merge all the images and then cut it into the tiles of the correct size, first converting to GeoTIFF the "collage" image derived from the composition of the other tiles.\end{itemize}
+
+\subsection{GeoJSON detection and generation}Once the tiles have been converted to GeoTIFF it is possible to proceed with the inference on each individual tile and relate the position in pixels to the geographical position, an operation possible thanks to Rasterio.\\After the detection process is finished, in order to share the precise coordinates of the trees present in the analyzed images so that they are usable by GIS, the solution indicated is to export a GeoJSON. The latter is precisely a particular format of JSON that is used for the exchange of geospatial data: a GeoJSON can describe an object detected on the map as a geographical point, with also explanatory properties, such as the class of the object represented or the name.\\It also supports geometry types, such as points, lines and polygons, making it also indicated to represent for example the bounding boxes returned by YOLO\cite{GeoJSON}.
+
+\section{Conversion to GeoTIFF with Rasterio}To merge and convert tiles using Rasterio, you need to use Python. Unlike the solutions previously seen for model training, in the case of operations with images and simple inference for tree detection, it is not strictly necessary to use a GPU: it is enough to launch the scripts on your machine taking care to enhance the correct parameters.\\\\Below are some snippets of code, which make up the important parts of the tile processing scripts. It also presents the inference phase with YOLO11 which, while representing one of the possible alternatives for tree detection, allows to illustrate the entire process up to the generation of GeoJSON files. This code is responsible for saving a JPG or PNG raster image, in a GeoTIFF image. Before arriving at the save function, in the full script there is a list of commands that are used to extract the zoom level, latitude and longitude from the filename, these lines are left out as they are of trivial implementation.\\More interesting, however, is to observe how these values are converted into tile coordinates, as a matrix of squares, an operation necessary to create bounds to be saved later as GeoTIFF.\\
+
+\subsection{Lat/long conversion and zoom into slippy coordinates}
+
+\begin{lstlisting}
+def deg2num(lat_deg: float, lon_deg: float, zoom: int) -> Tuple[int, int]:
+    lat_rad = math.radians(lat_deg)
+    n = 2.0 ** zoom
+    x = int((lon_deg + 180.0) / 360.0 * n)
+    y = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
+    return (x, y)
+\end{lstlisting}
+
+\noindent
+\textit{deg2num}is a standard conversion function for this type of operation, in the network you can find others that use third-party libraries, but very important to understand the mechanism of conversion to tile coordinates.\\This type of tile coordinates are also called "slippy"\cite{osm-slippy-map-tilenames}, which refers to the type of map that we all consult on the web, which allows you to move ("to slip" means "slip") and enlarge/shrink the display, with zoom (e.g. Google Maps).\\The conversion of these coordinates takes place through the projection called Web Mercator, which is a "digital" variant of the cartographic projection of Mercator, cartographer and astronomer who in the 16th century converted the spherical Earth's surface to a flat surface, thus creating the maps that we consult even today.\\
+
+\subsection{Calculating geographical boundaries}
+
+\begin{lstlisting}
+def calculateBounds(x: int, y: int, zoom: int) -> Tuple[float, float, float, float]:
+    n = 2.0 ** zoom
+    west = x / n * 360.0 - 180.0
+    east = (x + 1) / n * 360.0 - 180.0
+    
+    north_rad = math.atan(math.sinh(math.pi * (1 - 2 * y / n)))
+    north = math.degrees(north_rad)
+    
+    south_rad = math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n)))
+    south = math.degrees(south_rad)
+    
+    bounds = (west, south, east, north)
+\end{lstlisting}
+
+\noindent This part of code is critical to finding what are called image "bounds". In this specific case, the tiles downloaded via APIs by the map provider, indicate as the lat/long coordinate of the north-west center of the tile, it is necessary at this point to isolate which are the bounds in the four cardinal points, so as to find what are the geographical limits of the tile:\begin{itemize}
+    \item \textit{West}: longitude of the left (west) edge of the tile\item \textit{south}: latitude of the bottom (south) edge of the tile\item \textit{east}: longitude of the right (east) edge of the tile\item \textit{north}: latitude of the top (north) edge of the tile\end{itemize}
+\noindent These four bounds will then be needed by Rasterio in order to create the GeoTIFF.\subsection{GeoTIFF saving}
+\begin{lstlisting}
+def saveGeotiff(bounds: Tuple[float, float, float, float], outputPath: str) -> bool:
+    west, south, east, north = bounds
+    outputImage = Image.new('RGB', (TILE_SIZE, TILE_SIZE))
+            
+    transform = Affine.translation(west, north) * Affine.scale((east - west) / width, (south - north) / height)
+            
+    imageArray = np.array(outputImage)
+    imageArray = np.transpose(imageArray, (2, 0, 1))
+            
+    with rasterio.open(
+        outputPath,
+        'w',
+        driver='GTiff',
+        height=height,
+        width=width,
+        count=imageArray.shape[2],
+        dtype=imageArray.dtype,
+        crs=CRS.from_epsg(4326),
+        transform=transform,
+        compress='lzw'
+    ) as dst:
+        dst.write(imageArray)
+\end{lstlisting}
+
+\noindent The function for saving the image as GeoTIFF takes as input the bounds from \textit{calculate\_bounds} and the \textit{output\_path} where to save the image. First, an RGB image must be created that can contain the tile, which is instantiated with Pillow.\\The image is then passed to the Rasterio library as an array through a conversion that takes place thanks to NumPy.\\Rasterio, in order to correctly write the data in the GeoTIFF file, expects an array so structured:\begin{itemize}
+    \item shape: bands, height, width\item numeric type: uint8, float32...\end{itemize}
+
+\noindent To proceed with the writing of the image, in line 4, a particular transformation matrix must first be made:\begin{itemize}
+    \item \textit{Affine.translation(west, north)}: is a translation transformation: the upper left corner of the image corresponds to the northeast in geographical coordinates.\item \textit{Affine.scale(...)}: executes a pixel scale, where each pixel, on the horizontal axis, is\textit{(east - west) / width}degrees of longitude, while each pixel, on the y (vertical) axis, is worth\textit{(south - north) / height}degrees of latitude.\item Multiplication: Gets a related matrix that allows Rasterio to connect each pixel of the image to the exact georeferenced position.\end{itemize}
+
+\noindent The last operation before writing the GeoTIFF is to transpose the axes of the image. This change is necessary because the Pillow RGB image uses the format (height, width, bands), while Rasterio requires the format (bands, height, width), with the number of bands (three in the case of the RGB format) specified as the first parameter. Then it is enough to invoke Rasterio, providing all the necessary parameters to make sure that the GeoTIFF in output is perfectly compatible with GIS systems:\begin{itemize}
+    \item \textit{outputPath}: path of the output file\item \textit{'w'}: file opening mode, in this case write\item \textit{driver}: type of raster format to use, "GTiff" is our GeoTIFF\item \textit{height}: number of lines in pixels of the image\item \textit{width}: number of columns in pixels of the image\item \textit{count}: number of image bands\item \textit{dtype}: type of pixel data (e.g. uint8, float32)\item \textit{crs}: Coordinates Reference System, in this case sets the WGS84 system (lat/lon, GPS standard).\item \textit{transform}: affine transformation matrix that connects pixels to geographical coordinates (bounding box + resolution).\item \textit{compressed}: compression algorithm for the file\end{itemize}
+
+\subsection{Tree Detection}
+\begin{lstlisting}
+def analyzeGeotiffTreeCoverage(imagePath, modelPath, conf=0.25):
+    with rasterio.open(imagePath) as src:
+        transform = src.transform
+            
+        imageArray = src.read([1, 2, 3])
+        imageArray = np.transpose(imageArray, (1, 2, 0))
+            
+        crs = src.crs
+        width = src.width
+        height = src.height
+\end{lstlisting}As already mentioned earlier there are many ways to make the detection of trees, here is the code for inference with YOLO by way of example.\\The script performs, at least in part, the reverse transformation process from Rasterio image to NumPy. This is because YOLO asks for an RGB image in input, so with the channel matrix organized in a standard way. Pillow is used again for conversion.\\
+
+\begin{lstlisting}
+    model = YOLO(model_path)
+    results = model(img_array, conf=conf)
+\end{lstlisting}The inference on the image is then launched.\\The code for this type of inference differs from that used for simple inference with YOLO. While the latter identifies the position of the tree in the image by returning an image with the bounding boxes highlighted through OpenCV, in this case the detected position is converted to geographical coordinates (latitude/longitude) corresponding to the actual location of the tree.\begin{lstlisting}
+    for result in results:
+        if result.boxes is not None:
+            boxes = result.boxes.xyxy.cpu().numpy()
+            confidences = result.boxes.conf.cpu().numpy()
+            
+            for box, confidence in zip(boxes, confidences):
+                if confidence >= conf:
+                    x1, y1, x2, y2 = box.astype(int)
+                    
+                    centerX = (x1 + x2) / 2
+                    centerY = (y1 + y2) / 2
+                    
+                    lon, lat = transform * (centerX, centerY)
+\end{lstlisting}This is how the results are analyzed, in a similar way as seen in the YOLO chapter but in this case, thanks to the transformation matrix provided by Rasterio, the function is able to derive the geographical coordinates from the precise point in pixels of the tree detected in the image.\\At this point we can build, thanks to all the parameters collected by the detection in the image and the conversion of the pixels to lat/long, the GeoJSON that will feed GIS.\\In the case of DetecTree2, the output of the prediction to be written in the GeoJSON is not represented by a point, but by a polygon that delimits the entire crown of the tree.\subsection{GeoJSON Generation}Gather all the latitude and longitude coordinates of the trees detected in the images, the last step involves creating the GeoJSON, following this format to maintain compatibility with GIS software\cite{GeoJSON}:\\
+
+\begin{lstlisting}
+{
+"type": "FeatureCollection",
+"crs": {
+    "type": "name",
+        "properties": {
+            "name": "EPSG:4326"
+        }
+    },
+"features": [
+    ...
+    ]
+}
+\end{lstlisting}A GeoJSON file must explicitly specify the type of annotations it contains. In this case, it is\textit{FeatureCollection}, indicating the presence of an array of geographic elements such as polygons or points.\\The crs property, on the other hand, indicates the type of coordinates that are specified in features such as EPSG:4326, also known as WGS84, which is equivalent to the classic notation of latitude and longitude with decimal degrees.\\Finally the features array will contain a collection of objects, i.e. the points corresponding to the position of the trees, which have this format:\\
+
+\begin{lstlisting}
+{
+    "type": "Feature",
+    "geometry": {
+        "type": "Point",
+        "coordinates": [
+          10.986155775846253,
+          45.445288495847386
+        ]
+    },
+    "properties": {
+        "tree_id": 0,
+        "confidence": 0.810298502445221,
+        "image_name": "image.tif",
+        "image_path": "/data1/data2/image.tif",
+        "source_crs": "EPSG:4326",
+        "bbox_x1": 600,
+        "bbox_y1": 84,
+        "bbox_x2": 634,
+        "bbox_y2": 123,
+        "pixel_x": 617.0,
+        "pixel_y": 103.5
+    }
+}
+\end{lstlisting}The declaration of the "Feature" type is fundamental, where the type of geographical feature is specified, in this case Point, with its coordinates in the format declared by the parameter of the dedicated json.\\It is also possible in a GeoJSON to declare custom properties, which contain data related to the declared feature. In the case of YOLO for example it makes sense to report a numerical id of the detected tree, the level of confidence, the path of the image and the coordinates of the bounding boxes.\\It is important to point out that properties are not mandatory anyway, only the type and geometry of the feature are.\section{Result on QGIS}By importing the GeoJSON thus generated onto QGIS, an open source GIS software, the detected trees appear as georeferenced points on the map, allowing the tree cover distribution to be displayed.

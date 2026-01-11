@@ -1,0 +1,51 @@
+\chapter{DetecTree}
+DetecTree is a machine learning algorithm that is not limited to the detection of individual trees, but also allows for the identification of entire wooded areas or green zones within satellite images. As introduced in the technical chapter earlier, it cannot be categorized as a neural network, since the algorithm based on the AdaBoost detector is not composed of nodes and layers but "simply" of a decision tree.\\
+
+\section{Principle of operation}
+The operating principle of the DetecTree algorithm can be summarized in the following points \cite{bosch2020detectree}:
+\begin{itemize}
+    \item Tile subdivision: the aerial image is divided into smaller tiles to generate a mosaic of "tiles" of a specific size.
+    \item Choice of training tiles: tiles to be used for training are selected using GIST descriptors, i.e. numerical arrays that synthesize visual and semantic characteristics of an image portion.
+    \item Ground truth masks: for each tile chosen for training, "tree/non-tree" binary masks must be provided using image editing tools.
+    \item Training: for each pixel, an array of 27 features is extracted and an AdaBoost classifier is trained, which is effectively a binary classifier that associates the feature vector with the "tree/non-tree" classes.
+    \item Testing: proceeding with inference on test tiles, the classification is then refined with an algorithm, improving detection on adjacent pixels classified as tree.
+\end{itemize}
+
+\noindent
+The set of 27 features is a representation given to each individual pixel by the AdaBoost classifier during training, to allow the model to distinguish pixels belonging or not belonging to a tree. This type of classification is performed based on both color information and image context.\\
+The features are distinguished as follows:
+
+\begin{itemize}
+    \item 6 color features: contain pixel color data, such as RGB channels and possible derived combinations.
+    \item 18 texture features: statistical measures (e.g. mean, variance, contrast, etc.) computed on local regions around the pixel, often derived from models.
+    \item 3 entropy features: measure the unpredictability of intensity values in a specific region around the pixel.
+\end{itemize}
+
+\section{Type of model used}
+In this case, the GitHub project repository makes the pre-trained model available, so that it can be used directly without having to resort to the training procedure but, above all, without having to resort to manual annotation of images for the training dataset.
+
+\section{Parameters}
+In the case of DetecTree, in addition to the image that highlights tree cover, the percentage value of the cover present within the analyzed image is also available.
+
+\section{Inference}
+\begin{lstlisting}
+    import skops.io as sio
+
+    untrusted_types = sio.get_untrusted_types(file="detectree_model.skops")
+    model = sio.load("detectree_model.skops", trusted=untrusted_types)
+
+    clf = dtr.Classifier(clf=model)
+    pred = clf.predict_img(image_path)
+\end{lstlisting}
+
+\noindent
+These five lines of code are responsible for loading the model and performing inference with DetecTree.\\
+In order to classify the image, you must first import the Skops library \cite{skops}, which is a Python library used to import models based on Scikit-learn, a well-known open-source platform for machine learning in Python.\\
+The model could potentially be imported directly from Scikit, but this is not recommended, as the library uses a standard Python module (Pickle) to serialize and deserialize models, which can execute arbitrary code during deserialization, exposing the host on which it is running to potential attacks.\\
+In the following lines, the model types that define which structure or class the object has (such as a model, vector, or related data) are loaded. In this case, it is chosen to load all types, even those that are not automatically considered safe to load: even when loading types considered "unverified", the protection that Skops offers against Pickle's deserialization attacks still remains.\\
+Once the model is loaded, classification proceeds by performing the prediction with \textit{predict\_img}, which returns the label map (e.g. 2D array of classes) for the input image.
+
+\section{False positives}
+The use of AdaBoost nevertheless introduces a significant issue as, working by similarity, it is not only imprecise at distinguishing between trees and meadows, but is heavily penalized when green areas are close to other zones with similar characteristics, such as watercourses.\\
+In this case, in fact, DetecTree struggles to delimit the boundaries of green areas, erroneously classifying areas that it should not consider as wooded.\\
+A significant example of this problem can be found in the Ponte Aleardi area in Verona, near the gardens of the monumental cemetery: the algorithm mistakenly classifies a portion of the waters of the Adige river as a tree-covered area, due to the chromatic proximity to the foliage of the trees on Lungadige Porta Vittoria.
